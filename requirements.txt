@@ -1,6 +1,9 @@
+<<<<<<< HEAD
 torch
 torchvision
 torchaudio
+=======
+>>>>>>> a605f271b6e8ade1ddb6b42a0c49878e9865854f
 ftfy
 regex
 tqdm
@@ -10,4 +13,7 @@ numpy
 Pillow
 matplotlib
 jupyter
+<<<<<<< HEAD
 
+=======
+>>>>>>> a605f271b6e8ade1ddb6b42a0c49878e9865854f

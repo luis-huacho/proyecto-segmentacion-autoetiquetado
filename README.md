@@ -1,9 +1,10 @@
-# Segmentation-Description-Matching-Distilling
+# Learn from Foundation Model: Fruits Detection Model without Manual Annotation
+## Segmentation-Description-Matching-Distilling
 
 **Zhejiang University, ZJU-Hangzhou Global Scientific and Technological 
 Innovation Center**
 
-[Yanan Wang], [Zhenghao Fei], [Ruichen Li], [Yibin Ying]
+[Yanan Wang], [Zhenghao Fei](https://github.com/ZhenghaoFei), [Ruichen Li], [Yibin Ying]
 
 [[`Paper`](
 https://doi.org/10.48550/arXiv.2411.16196
