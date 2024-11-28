@@ -289,8 +289,8 @@ def main():
                 stem, suffix = os.path.splitext(img_file)
                 os.makedirs(f'{masks_segs_folder}/{img_tain_folder}/{stem}', exist_ok=True)
                 path_stem = f'{masks_segs_folder}/{img_tain_folder}/{stem}'
-                os.makedirs(f'{opt.va_all_output_path}/{img_tain_folder}', exist_ok=True)
-                path_stem_visual_all = f'{opt.va_all_output_path}/{img_tain_folder}/{stem}'
+                os.makedirs(f'{va_output_path}/{img_tain_folder}', exist_ok=True)
+                path_stem_visual_all = f'{va_output_path}/{img_tain_folder}/{stem}'
                 os.makedirs(f'{json_save_dir}/{img_tain_folder}/{stem}', exist_ok=True)
                 json_save_path = f'{json_save_dir}/{img_tain_folder}/{stem}'
                                 
