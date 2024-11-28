@@ -1,23 +1,12 @@
 import argparse
-import numpy as np
 import torch
-import cv2
 import os
-from pathlib import Path
-import sys
-sys.path.append('your/path/to/SDM-D/sam2')
-
-#print(torch.cuda.current_device())
-
-import random
-from PIL import Image
-from collections import OrderedDict
 import open_clip
 
 from sam2.build_sam import build_sam2
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
-from utils import mask_image, save_mask, show_anns, filter_masks_by_overlap, crop_object_from_white_background, save_annotations, get_masked_image, clip_prediction, read_strawberry_descriptions, create_output_folders
+from utils import read_strawberry_descriptions, create_output_folders
 from utils import generate_all_sam_mask, label_assignment
 
 # Parse arguments
