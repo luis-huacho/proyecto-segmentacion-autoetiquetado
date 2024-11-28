@@ -105,7 +105,7 @@ Images/
 │ │ │── ...
 
 
-Second, put your desrctipt
+Second, put your desrctiptions and labels into a .txt file, you can put it in `./description` folder. Each line is in the format of `description text, label`.
 
 Third, please give parameters, you can run:
 
@@ -115,7 +115,7 @@ cd SDM-D
 python SDM.py --image_segs_folder /path/to/images --out_folder /path/to/output --des_file /path/to/prompt.txt
 
 ```
-Third, the structure of the `output` folder is as follows:
+In the last, the structure of the `output` folder is as follows:
 
 output/
 
