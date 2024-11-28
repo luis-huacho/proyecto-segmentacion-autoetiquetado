@@ -21,7 +21,7 @@ https://doi.org/10.48550/arXiv.2411.16196
 First, install PyTorch suitable for your machine, as well as small additional dependencies, and then install this repo as a Python package. On a CUDA GPU machine, the following will do the trick:
 
 ```bash
-conda create -n SDM python=3.9
+conda create -n SDM python=3.10
 
 conda activate SDM
 
