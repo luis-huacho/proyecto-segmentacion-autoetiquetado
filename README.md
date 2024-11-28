@@ -97,7 +97,7 @@ Third, please give parameters, you can run:
 ```bash
 cd SDM-D
 
-python SDM.py --image_segs_folder /path/to/images --out_folder /path/to/output --des_file /path/to/prompt.txt
+python SDM.py --image_folder /path/to/images --out_folder /path/to/output --des_file /path/to/prompt.txt
 
 ```
 In the last, the structure of the `output` folder is as follows:
