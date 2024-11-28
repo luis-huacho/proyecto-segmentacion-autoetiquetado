@@ -80,12 +80,37 @@ model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrai
 ### Label prediction
 
 
-(1) Our project is very easy to use, just need to run SDM.py. First, please configure parameters in SDM.py line 202-229, and then run:
+(1) Our project is very easy to use, just need to run SDM.py. 
+
+First, please put `your dataset` into `./Images` folder, there is an example:
+
+Images/
+
+├── your dataset/
+
+│ ├── train/
+
+│ │ │── 001.png
+
+│ │ │── 002.png
+
+│ │ │── ...
+
+│ ├── val/
+
+│ │ │── 012.png
+
+│ │ │── 050.png
+
+│ │ │── ...
+
+
+Then, please give parameters, you can run:
 
 ```bash
-python SDM.py
+python SDM.py 
 ```
-The structure of the `output` folder is as follows:
+Third, the structure of the `output` folder is as follows:
 
 output/
 
