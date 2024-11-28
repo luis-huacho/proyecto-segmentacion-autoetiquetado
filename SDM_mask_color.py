@@ -1,6 +1,5 @@
-#这份代码是您在使用SDM的同时灵活地调整掩码的颜色。
 ###This code is for you to flexibly adjust the color of the mask while using SDM.
-
+import argparse
 import numpy as np
 import torch
 import cv2
@@ -41,30 +40,30 @@ def final_visualization(image, anns, results, save_path):
     ax.imshow(image)  
     ax.set_autoscale_on(False)
 
-    # 创建一个 RGBA 图像用于掩码着色  ##Create an RGBA image for mask coloring
-    img_with_masks = image.copy()  # 复制原始图像，用于显示掩码  ##Copy the original image for displaying the mask
+    ##Create an RGBA image for mask coloring
+    img_with_masks = image.copy()  ##Copy the original image for displaying the mask
     overlay = np.zeros_like(img_with_masks, dtype=np.uint8)
 
-    # 为每个掩码区域着色，并保持颜色与标签一致  ##Color each mask area and keep the color consistent with the label
+    ##Color each mask area and keep the color consistent with the label
     for i, ann in enumerate(anns):
         mask = ann['segmentation']
         
         # 获取标签并设置颜色  ##Get the label and set the color
         label = ann['label']
         if label == 'others':
-            color =  (252, 248, 187) # 注意这里是0-255范围的值 ##Note that this is a value in the 0-255 range
+            color =  (252, 248, 187) ##Note that this is a value in the 0-255 range
         elif label == 'waxberry':  
-            color = (229,76,94)  # 粉色  ##Pink
+            color = (229,76,94)  ##Pink
         elif label == 'unripe':
-            color = (146, 208, 80)  # 浅绿色  ##Light green
+            color = (146, 208, 80)  ##Light green
         elif label == 'leaf':
-            color = (0, 176, 80)  # 绿色  ##Green
+            color = (0, 176, 80)  ##Green
         elif label == 'stem':
-            color = (243, 163, 97)  # 橙色  ##Orange
+            color = (243, 163, 97)  ##Orange
         elif label == 'flower':
-            color = (168, 218, 219)  # 浅黄色   ##Light yellow
+            color = (168, 218, 219)  ##Light yellow
 
-        # # 将掩码区域的颜色设置为对应的标签颜色  ##Set the color of the target area to the corresponding label color
+        ##Set the color of the target area to the corresponding label color
         overlay[mask > 0] = color  
 
     alpha = 0.4  # 掩码透明度  ##Mask transparency
@@ -77,7 +76,7 @@ def final_visualization(image, anns, results, save_path):
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 1.1
     thickness = 2
-    font_color = (1, 1, 1)  # 白色  ##White
+    font_color = (1, 1, 1)  ##White
 
     for res in results:
         # 设置每个标签的颜色 ##Set the color of each label
@@ -86,34 +85,34 @@ def final_visualization(image, anns, results, save_path):
             box_color =   (252/255, 248/255, 187/255)
             label_bg_color = (252/255, 248/255, 187/255)
         elif res['label'] == 'waxberry':
-            box_color =(229/255, 76/255, 94/255)  #粉色  ##Pink
+            box_color =(229/255, 76/255, 94/255)  ##Pink
             
             label_bg_color = (229/255, 76/255, 94/255)
         elif res['label'] == 'unripe':
-            box_color = (146/255, 208/255, 80/255)  # 浅绿色  ##Light green
+            box_color = (146/255, 208/255, 80/255)  ##Light green
             label_bg_color = (146/255, 208/255, 80/255)
         elif res['label'] == 'leaf':
-            box_color = (0/255, 176/255, 80/255)  # 绿色  ##Green
+            box_color = (0/255, 176/255, 80/255)  ##Green
             label_bg_color = (0/255, 176/255, 80/255)
         elif res['label'] == 'stem':
-            box_color = (243/255, 163/255, 97/255)  # 橙色  ##Orange
+            box_color = (243/255, 163/255, 97/255)  ##Orange
             label_bg_color = (243/255, 163/255, 97/255)
         elif res['label'] == 'flower':
-            box_color = (168/255, 218/255, 219/255)  # 浅黄色  ##Light yellow
+            box_color = (168/255, 218/255, 219/255)  ##Light yellow
             label_bg_color = (168/255, 218/255, 219/255)
 
-        # 绘制矩形框  ##Draw the rectangle
+        ##Draw the rectangle
         rect = plt.Rectangle((res['xmin'], res['ymin']),
                              res['xmax'] - res['xmin'],
                              res['ymax'] - res['ymin'],
                              linewidth=2, edgecolor=box_color, facecolor='none')
         ax.add_patch(rect)
 
-        # 绘制填充文本框  ##Draw the filled text box
+        ##Draw the filled text box
         ax.text(res['xmin'], res['ymin'] - 5, res['label'], color='white', fontsize=30,
                 ha='left', va='bottom', bbox=dict(facecolor=label_bg_color, edgecolor='none', boxstyle='round,pad=0'))
 
-    # 保存最终的图像  ##Save the final image
+    ##Save the final image
     plt.axis('off')
     plt.savefig(save_path)
     print(save_path)
@@ -168,7 +167,7 @@ def show_anns(sorted_anns, image, save_path, borders=True):
             contours = [cv2.approxPolyDP(contour, epsilon=0.01, closed=True) for contour in contours]
             cv2.drawContours(img, contours, -1, (0, 0, 1, 0.4), thickness=1)
 
-        # 标注掩码的索引
+        
         y, x = np.mean(np.argwhere(m), axis=0).astype(int)
         ax.text(x, y, str(i), color='white', fontsize=15, ha='center', va='center', weight='bold')
 
@@ -191,7 +190,7 @@ def filter_masks_by_overlap(masks, threshold):
     scores = [mask['stability_score'] for mask in masks]
     keep = torch.ones(len(masks_np), dtype=torch.bool)
 
-    # 遍历每个掩码  ##Iterate over each mask
+    ##Iterate over each mask
     for i in range(len(masks_np)):
         if not keep[i]:
             continue
@@ -199,7 +198,7 @@ def filter_masks_by_overlap(masks, threshold):
             if not keep[j]:
                 continue
             
-            # 计算交集和 IoU  ##Calculate the intersection and IoU
+            ##Calculate the intersection and IoU
             intersection = np.logical_and(masks_np[i], masks_np[j]).astype(np.float32).sum()
             smaller_area = min(areas[i], areas[j])
             if intersection > threshold * smaller_area:
@@ -208,7 +207,7 @@ def filter_masks_by_overlap(masks, threshold):
                 else:
                     keep[j] = False
 
-    # 过滤后的掩码  ##Filtered masks
+    ##Filtered masks
     filtered_masks = [mask for idx, mask in enumerate(masks) if keep[idx]]
     
     return filtered_masks
@@ -286,7 +285,7 @@ def clip_prediction(image_input, texts, labels):
 
 
 
-#草莓的提示词  ##prompt of strawberry
+##prompt of strawberry
 texts = [
 "a red strawberry with numerous points",
 "a pale green strawberry with numerous points",
@@ -309,15 +308,15 @@ output_path = '../output/strawberry/labels'
 va_output_path = '../output/strawberry/visual_new'
 va_all_output_path = '../output/strawberry/visual_all'
 json_save_dir = '../output/strawberry/json'
-mask_nms_key = True #默认是True，不需要改为False  ##Default is True, need to be changed to False
-mask_nms_thresh = 0.9  #两个掩码重叠的面积占小掩码的阈值  ##The threshold of the area of two masks overlapping is the area of the smaller mask
+mask_nms_key = True ##Default is True, need to be changed to False
+mask_nms_thresh = 0.9  ##The threshold of the area of two masks overlapping is the area of the smaller mask
 print(f'Your mask_nms_key is {mask_nms_key} !')
 
 sam2 = build_sam2(model_cfg, sam2_checkpoint, device ='cuda', apply_postprocessing=False)
-#根据你的数据集调整min_mask_region_area  ##Adjust min_mask_region_area according to the your dataset
+##Adjust min_mask_region_area according to the your dataset
 mask_generator = SAM2AutomaticMaskGenerator(sam2, points_per_side=32, min_mask_region_area=50) 
 
-#SAM2生成掩码  ##SAM2 generates masks
+##SAM2 generates masks
 for img_tain_folder in os.listdir(image_segs_folder):
     img_files = os.listdir(os.path.join(image_segs_folder, img_tain_folder))
     for img_file in img_files:
@@ -349,7 +348,7 @@ for img_tain_folder in os.listdir(image_segs_folder):
 
 
 
-#OpenClip对齐  ##OpenClip alignment
+##OpenClip alignment
 for img_train_folder in os.listdir(image_segs_folder):
     if img_train_folder == 'waxberry':
 
@@ -392,7 +391,7 @@ for img_train_folder in os.listdir(image_segs_folder):
                         c = max(contours, key=cv2.contourArea)
                         c = c.reshape(-1, 2)
                         num_points = len(c)
-                        skip = num_points // 300  #根据需求灵活调整取点数  ##Adjust the number of points according to the demand
+                        skip = num_points // 300  ##Adjust the number of points according to the demand
                         skip = max(1, skip)
                         approx_sparse = c[::skip]
                         bottom_point_index = np.argmax(approx_sparse[:, 1])
@@ -416,7 +415,7 @@ for img_train_folder in os.listdir(image_segs_folder):
             with open(filename, 'w') as f:
                 f.writelines(file_contents)
 
-            # 保存最终的可视化结果  ##Save the final visualization result
+            ##Save the final visualization result
             visual_dir = os.path.join(va_output_path, img_train_folder)
             os.makedirs(visual_dir, exist_ok=True)
             final_visualization(rgb_image, masks, results, os.path.join(visual_dir, img_file))

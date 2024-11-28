@@ -198,17 +198,32 @@ def clip_prediction(image_input, texts, labels):
 
 
 
-#草莓的提示词  ##prompt of strawberry
-texts = [
-"a red strawberry",  #a red strawberry with numerous points
-"a pale green strawberry with numerous points",
-"a green veined strawberry leaf",
-"a long and thin stem",
-"a white flower",
-"soil or background or something else",
-]
-labels = ['ripe', 'unripe', 'leaf','stem','flower','others']
-label_dict = {"ripe": 0, "unripe": 1, "leaf": 2, "stem": 3, "flower": 4,"others": 5}
+def read_strawberry_descriptions(file_path):
+    texts = []
+    labels = []
+    label_dict = {}
+    current_label = 0  # 用于给标签分配编号
+    
+    with open(file_path, 'r') as f:
+        lines = f.readlines()
+        for line in lines:
+            # 假设每行格式是： '提示词, 标签'
+            parts = line.strip().split(',')
+            if len(parts) == 2:  # 确保每行有两个部分
+                text = parts[0].strip()  # 提示词
+                label = parts[1].strip()  # 标签
+                
+                # 如果标签不在字典中，自动添加到字典并分配编号
+                if label not in label_dict:
+                    label_dict[label] = current_label
+                    current_label += 1
+                
+                texts.append(text)
+                labels.append(label_dict[label])
+            else:
+                print(f"Warning: Skipping malformed line: {line}")
+    
+    return texts, labels, label_dict
 
 
 def create_output_folders(base_folder):
@@ -225,6 +240,7 @@ def parse_opt(known=False):
     parser = argparse.ArgumentParser()
     parser.add_argument('--image_segs_folder', type=str, default='./Images/strawberry', required = True, help='Path to the image segmentation folder')
     parser.add_argument('--out_folder', type=str, default='./output/strawberry', required = True,help='Path to save mask outputs')
+    parser.add_argument('--des_file', type=str, default='./description/straw_des.txt', required = True,help='Path to your prompt texts')
     parser.add_argument('--sam2_checkpoint', type=str, default="./checkpoints/sam2_hiera_large.pt", required = False, help='SAM2 model checkpoint path')
     parser.add_argument('--model_cfg', type=str, default="sam2_hiera_l.yaml", required = False, help='SAM2 model config file')
     parser.add_argument('--mask_nms_key', type=bool, default=True, required = False,  help='Whether to apply NMS to masks')
@@ -250,10 +266,8 @@ def main():
     json_save_dir = os.path.join(out_folder, 'json')
     output_path = os.path.join(out_folder, 'labels')
     va_output_path = os.path.join(out_folder, 'visual')
-
-
-
-   
+    
+    texts, labels, label_dict = read_strawberry_descriptions(opt.des_file)  
 
 
     sam2 = build_sam2(opt.model_cfg, opt.sam2_checkpoint, device='cuda', apply_postprocessing=False)
