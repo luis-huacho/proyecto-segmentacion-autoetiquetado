@@ -108,28 +108,29 @@ Images/
 Second, please give parameters, you can run:
 
 ```bash
-python SDM.py 
+cd SDM-D
+
+python SDM.py --image_segs_folder /path/to/images --out_folder --image_segs_folder /path/to/output
+
 ```
 Third, the structure of the `output` folder is as follows:
 
 output/
 
-├── your dataset name/
+│── mask/  # mask of the instance segmentation task
 
-│ ├── mask/  # mask of the instance segmentation task
+│── labels/  # label of the instance segmentation task in YOLO format
 
-│ ├── labels/  # label of the instance segmentation task in YOLO format
+│── visual_new/  # visual of the instance segmentation task (SDM-D.py)
 
-│ ├── visual_new/  # visual of the instance segmentation task (SDM-D.py)
+│── visual_all/  # visual of all masks of an image
 
-│ └── visual_all/  # visual of all masks of an image
-
-│ └── json/  # json of the instance segmentation task
+│── json/  # json of the instance segmentation task
 
 (2) If you want to get colorful visual results, please run SDM-D.py. You can set the colors what you want in SDM-D.py line 53-70 and 84-103.
 
 ```bash
-python SDM-D.py
+python SDM_mask_color.py
 ```
 
 (3) If you want to explore parameters that fit your own dataset, you can run `../notebook/SDM.ipynb`.
