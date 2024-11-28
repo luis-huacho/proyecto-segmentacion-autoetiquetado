@@ -82,7 +82,7 @@ model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrai
 
 (1) Our project is very easy to use, just need to run SDM.py. 
 
-First, please put `your dataset` into `./Images` folder, there is an example:
+First, please put `your dataset` into `./Images` folder, there is an example (image.jpg is also okay):
 
 Images/
 
@@ -105,7 +105,7 @@ Images/
 │ │ │── ...
 
 
-Then, please give parameters, you can run:
+Second, please give parameters, you can run:
 
 ```bash
 python SDM.py 
