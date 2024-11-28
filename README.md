@@ -25,6 +25,10 @@ conda activate SDM
 
 pip install torch torchvision
 
+git clone https://github.com/AgRoboticsResearch/SDM-D.git
+
+cd SDM-D
+
 pip install -r requirements.txt
 ```
 
@@ -34,7 +38,9 @@ Please install the Segment-Anything-2 model first.
 ```bash
 git clone https://github.com/facebookresearch/segment-anything-2.git
 
-cd segment-anything-2; pip install -e .
+cd segment-anything-2
+
+pip install -e .
 ```
 
 
