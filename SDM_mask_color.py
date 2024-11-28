@@ -8,10 +8,10 @@ import os
 from pathlib import Path
 
 import sys
-import os
-sys.path.append(os.path.abspath('./segment-anything-2'))  ##Add the path to the segment-anything-2 folder
+import sys
+sys.path.append('your/path/to/SDM-D/sam2')  ##Add the path to the sam2 folder
 
-torch.cuda.set_device(1)
+torch.cuda.set_device(0)
 #print(torch.cuda.current_device())
 
 import random
@@ -32,8 +32,8 @@ if torch.cuda.get_device_properties(0).major >= 8:
     torch.backends.cudnn.allow_tf32 = True
 
 
-from sam2.sam2.build_sam import build_sam2
-from sam2.sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+from sam2.build_sam import build_sam2
+from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 import json
 
 def final_visualization(image, anns, results, save_path):
@@ -149,8 +149,8 @@ def save_mask(anns, path):
         img = (mask*255).astype(np.uint8)  
         cv2.imwrite(f'{path}/mask_{i}.png', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
-def show_anns(anns, image, save_path, borders=True):
-    if len(anns) == 0:
+def show_anns(sorted_anns, image, save_path, borders=True):
+    if len(sorted_anns) == 0:
         return
     
     fig, ax = plt.subplots(figsize=(20, 20))

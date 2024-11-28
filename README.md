@@ -86,7 +86,7 @@ First, please put `your dataset` into `./Images` folder, there is an example (im
 
 Images/
 
-├── your dataset/
+├── your dataset name/
 
 │ ├── train/
 
@@ -114,7 +114,7 @@ Third, the structure of the `output` folder is as follows:
 
 output/
 
-├── strawberry/
+├── your dataset name/
 
 │ ├── mask/  # mask of the instance segmentation task
 
