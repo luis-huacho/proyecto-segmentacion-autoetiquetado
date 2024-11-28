@@ -21,7 +21,7 @@ First, install PyTorch suitable for your machine, as well as small additional de
 conda create -n SDM python=3.10
 conda activate SDM
 pip install torch torchvision # install the torch you need
-git clone --recurse-submodules https://github.com/AgRoboticsResearch/SDM-D.git
+git clone  https://github.com/AgRoboticsResearch/SDM-D.git
 cd SDM-D
 pip install -r requirements.txt
 ```
