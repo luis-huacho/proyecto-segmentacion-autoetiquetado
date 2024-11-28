@@ -174,7 +174,7 @@ def save_annotations(anns, path):
             json.dump(ann_serializable, f, ensure_ascii=False, indent=2)
 
 
-def get_masked_image(mask_img_path):
+def get_masked_image(rgb_image, mask_img_path):
     
     mask_img = cv2.imread(mask_img_path)[:, :, 0] # only one layer mask is needed
     #print("mask_img_path: ", mask_img_path)
@@ -219,7 +219,7 @@ def read_strawberry_descriptions(file_path):
                     current_label += 1
                 
                 texts.append(text)
-                labels.append(label_dict[label])
+                labels.append(label)
             else:
                 print(f"Warning: Skipping malformed line: {line}")
     
@@ -228,7 +228,7 @@ def read_strawberry_descriptions(file_path):
 
 def create_output_folders(base_folder):
     # 子文件夹的名称
-    subfolders = ['mask', 'json', 'labels', 'visual']
+    subfolders = ['mask', 'json', 'labels', 'visual', 'label_visual']
     
     # 遍历创建文件夹
     for folder in subfolders:
@@ -266,6 +266,7 @@ def main():
     json_save_dir = os.path.join(out_folder, 'json')
     output_path = os.path.join(out_folder, 'labels')
     va_output_path = os.path.join(out_folder, 'visual')
+    label_out_dir = os.path.join(out_folder, 'label_visual')
     
     texts, labels, label_dict = read_strawberry_descriptions(opt.des_file)  
 
@@ -323,6 +324,7 @@ def main():
                 results = []
                 mask_seg_folder = os.path.join(masks_segs_folder, img_train_folder, stem)
                 file_contents = []
+                
                 for file in os.listdir(mask_seg_folder):
                     mask_path = os.path.join(mask_seg_folder, file)
                     mask = cv2.imread(mask_path, 0)
@@ -335,7 +337,7 @@ def main():
                     
 
                     try:
-                        masked_image = get_masked_image(mask_path)
+                        masked_image = get_masked_image(rgb_image, mask_path)
                         image, xmin, ymin, xmax, ymax = crop_object_from_white_background(masked_image)
                         
                         image_preprocessed = preprocess(image)
@@ -392,7 +394,7 @@ def main():
                     visual_dir = os.path.join(va_output_path, img_train_folder)
                     os.makedirs(visual_dir, exist_ok=True)
                     
-                    cv2.imwrite(os.path.join(visual_dir, img_file), img_final)
+                    cv2.imwrite(os.path.join(label_out_dir, img_file), img_final)
 
                 print(filename,'  have been finished!')
 

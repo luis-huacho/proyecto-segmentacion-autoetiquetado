@@ -350,76 +350,73 @@ for img_tain_folder in os.listdir(image_segs_folder):
 
 ##OpenClip alignment
 for img_train_folder in os.listdir(image_segs_folder):
-    if img_train_folder == 'waxberry':
 
-        img_files = os.listdir(os.path.join(image_segs_folder, img_train_folder))
-        for img_file in img_files:
-            img_file_with_txt_suffix = Path(img_file).with_suffix('.txt')
-            stem, suffix = os.path.splitext(img_file)
-            img_path = os.path.join(image_segs_folder, img_train_folder, img_file)
-            image = Image.open(img_path).convert('RGB')
-            rgb_image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
-            img_width, img_height = image.size
-            results = []
-            mask_seg_folder = os.path.join(masks_segs_folder, img_train_folder, stem)
-            file_contents = []
-            masks = []
+    img_files = os.listdir(os.path.join(image_segs_folder, img_train_folder))
+    for img_file in img_files:
+        img_file_with_txt_suffix = Path(img_file).with_suffix('.txt')
+        stem, suffix = os.path.splitext(img_file)
+        img_path = os.path.join(image_segs_folder, img_train_folder, img_file)
+        image = Image.open(img_path).convert('RGB')
+        rgb_image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+        img_width, img_height = image.size
+        results = []
+        mask_seg_folder = os.path.join(masks_segs_folder, img_train_folder, stem)
+        file_contents = []
+        masks = []
 
-            for file in os.listdir(mask_seg_folder):
-                mask_path = os.path.join(mask_seg_folder, file)
-                mask = cv2.imread(mask_path, 0)
-                labelled_mask, num_labels = label_region(mask)
-                region_sizes = np.bincount(labelled_mask.flat)
-                region_sizes[0] = 0
-                mask_img = cv2.imread(mask_path)[:, :, 0]
-                masked_image = mask_image(rgb_image, mask_img)
-                try:
-                    masked_image = get_masked_image(mask_path)
-                    image, xmin, ymin, xmax, ymax = crop_object_from_white_background(masked_image)
-                    
-                    image_preprocessed = preprocess(image)
-                    image_input = torch.tensor(np.stack([image_preprocessed]))
-                    label = clip_prediction(image_input, texts, labels)
-                    label_num = label_dict[label]
-                    results.append({"label": label, "xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
-                    #file_contents.append(f'{label_num} ')
-                    line = f'{label_num}'
+        for file in os.listdir(mask_seg_folder):
+            mask_path = os.path.join(mask_seg_folder, file)
+            mask = cv2.imread(mask_path, 0)
+            labelled_mask, num_labels = label_region(mask)
+            region_sizes = np.bincount(labelled_mask.flat)
+            region_sizes[0] = 0
+            mask_img = cv2.imread(mask_path)[:, :, 0]
+            masked_image = mask_image(rgb_image, mask_img)
+            try:
+                masked_image = get_masked_image(mask_path)
+                image, xmin, ymin, xmax, ymax = crop_object_from_white_background(masked_image)
+                
+                image_preprocessed = preprocess(image)
+                image_input = torch.tensor(np.stack([image_preprocessed]))
+                label = clip_prediction(image_input, texts, labels)
+                label_num = label_dict[label]
+                results.append({"label": label, "xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
+                #file_contents.append(f'{label_num} ')
+                line = f'{label_num}'
 
-                    for region_label in range(1, num_labels+1):
-                        mask_cur = ((labelled_mask == region_label) * 255).astype(np.uint8)
-                        contours, _ = cv2.findContours(mask_cur, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-                        c = max(contours, key=cv2.contourArea)
-                        c = c.reshape(-1, 2)
-                        num_points = len(c)
-                        skip = num_points // 300  ##Adjust the number of points according to the demand
-                        skip = max(1, skip)
-                        approx_sparse = c[::skip]
-                        bottom_point_index = np.argmax(approx_sparse[:, 1])
-                        sorted_points = np.concatenate([approx_sparse[bottom_point_index:], approx_sparse[:bottom_point_index]])
-                        line += ' ' + ' '.join(f'{format(point[0]/img_width, ".6f")} {format(point[1]/img_height, ".6f")}' for point in sorted_points)
-                    line += '\n'
-                    file_contents.append(line)
+                for region_label in range(1, num_labels+1):
+                    mask_cur = ((labelled_mask == region_label) * 255).astype(np.uint8)
+                    contours, _ = cv2.findContours(mask_cur, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+                    c = max(contours, key=cv2.contourArea)
+                    c = c.reshape(-1, 2)
+                    num_points = len(c)
+                    skip = num_points // 300  ##Adjust the number of points according to the demand
+                    skip = max(1, skip)
+                    approx_sparse = c[::skip]
+                    bottom_point_index = np.argmax(approx_sparse[:, 1])
+                    sorted_points = np.concatenate([approx_sparse[bottom_point_index:], approx_sparse[:bottom_point_index]])
+                    line += ' ' + ' '.join(f'{format(point[0]/img_width, ".6f")} {format(point[1]/img_height, ".6f")}' for point in sorted_points)
+                line += '\n'
+                file_contents.append(line)
 
-                    masks.append({
-                        'segmentation': mask_img,
-                        'area': np.sum(mask_img),
-                        'label': label
-                    })
+                masks.append({
+                    'segmentation': mask_img,
+                    'area': np.sum(mask_img),
+                    'label': label
+                })
 
-                except Exception as e:
-                    print(f"Error processing file {mask_path}, skipping. Error was {e}")
-                    continue
+            except Exception as e:
+                print(f"Error processing file {mask_path}, skipping. Error was {e}")
+                continue
 
-            filename = os.path.join(output_path, img_train_folder, f'{stem}.txt')
-            os.makedirs(os.path.dirname(filename), exist_ok=True)
-            with open(filename, 'w') as f:
-                f.writelines(file_contents)
+        filename = os.path.join(output_path, img_train_folder, f'{stem}.txt')
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        with open(filename, 'w') as f:
+            f.writelines(file_contents)
 
-            ##Save the final visualization result
-            visual_dir = os.path.join(va_output_path, img_train_folder)
-            os.makedirs(visual_dir, exist_ok=True)
-            final_visualization(rgb_image, masks, results, os.path.join(visual_dir, img_file))
+        ##Save the final visualization result
+        visual_dir = os.path.join(va_output_path, img_train_folder)
+        os.makedirs(visual_dir, exist_ok=True)
+        final_visualization(rgb_image, masks, results, os.path.join(visual_dir, img_file))
 
-            print(filename, '  have been finished!')
-    else:
-        continue
+        print(filename, '  have been finished!')
