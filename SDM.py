@@ -25,8 +25,8 @@ if torch.cuda.get_device_properties(0).major >= 8:
     torch.backends.cudnn.allow_tf32 = True
 
 
-from segment-anything-2.sam2.build_sam import build_sam2
-from segment-anything-2.sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+from sam2.sam2.build_sam import build_sam2
+from sam2.sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 import json
 
 def mask_image(image, mask):
