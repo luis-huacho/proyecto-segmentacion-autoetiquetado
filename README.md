@@ -19,15 +19,10 @@ First, install PyTorch suitable for your machine, as well as small additional de
 
 ```bash
 conda create -n SDM python=3.10
-
 conda activate SDM
-
-pip install torch torchvision
-
-git clone https://github.com/AgRoboticsResearch/SDM-D.git
-
+pip install torch torchvision # install the torch you need
+git clone  https://github.com/AgRoboticsResearch/SDM-D.git
 cd SDM-D
-
 pip install -r requirements.txt
 ```
 
@@ -35,25 +30,15 @@ pip install -r requirements.txt
 Please install the Segment-Anything-2 model first.
 
 ```bash
-git clone https://github.com/facebookresearch/segment-anything-2.git
-
+git clone https://github.com/facebookresearch/sam2.git
 cd sam2
-
 pip install -e .
 ```
 
-
 ### 3. Install OpenCLIP
 Please install OpenCLIP.
-
 ```bash
 pip install open_clip_torch
-```
-
-To run the example notebooks, `jupyter` and `matplotlib` are required and can be installed by:
-
-```bash
-pip install -e ".[demo]"
 ```
 
 ## 🚀Getting Started
