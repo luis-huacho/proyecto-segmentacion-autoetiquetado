@@ -395,3 +395,6 @@ def main():
                     cv2.imwrite(os.path.join(visual_dir, img_file), img_final)
 
                 print(filename,'  have been finished!')
+
+if __name__ == '__main__':
+    main()
