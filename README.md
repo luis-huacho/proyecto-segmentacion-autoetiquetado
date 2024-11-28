@@ -14,8 +14,6 @@ https://doi.org/10.48550/arXiv.2411.16196
 
 **🍄Segmentation-Description-Matching-Distilling** is a framework designed to distill small models that enable panoramic perception of complex agricultural scenes from foundation models without relying on manual labels. At its core is SDM, which operates without pre-training or significant resource consumption, within a segment-then-prompt paradigm. SDM demonstrates strong zero-shot performance across various fruit detection tasks (object detection, semantic segmentation, and instance segmentation), consistently outperforming SOTA OVD methods across various fruit perception tasks, demonstrating superior dexterity and generality.
 
-![zero-shot segmentation](./asset/6-other2.png)
-
 ## 🍇Installation
 ### 1. Prepare the environment
 First, install PyTorch suitable for your machine, as well as small additional dependencies, and then install this repo as a Python package. On a CUDA GPU machine, the following will do the trick:
