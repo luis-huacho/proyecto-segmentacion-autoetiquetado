@@ -1,0 +1,13 @@
+torch
+torchvision
+torchaudio
+ftfy
+regex
+tqdm
+scipy
+opencv-python
+numpy
+Pillow
+matplotlib
+jupyter
+
