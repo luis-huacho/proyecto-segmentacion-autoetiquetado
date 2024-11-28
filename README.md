@@ -105,12 +105,14 @@ Images/
 │ │ │── ...
 
 
-Second, please give parameters, you can run:
+Second, put your desrctipt
+
+Third, please give parameters, you can run:
 
 ```bash
 cd SDM-D
 
-python SDM.py --image_segs_folder /path/to/images --out_folder --image_segs_folder /path/to/output
+python SDM.py --image_segs_folder /path/to/images --out_folder /path/to/output --des_file /path/to/prompt.txt
 
 ```
 Third, the structure of the `output` folder is as follows:
