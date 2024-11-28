@@ -68,27 +68,18 @@ model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrai
 (1) Our project is very easy to use, just need to run SDM.py. 
 
 First, please put `your dataset` into `./Images` folder, there is an example (image.jpg is also okay):
-
+```bash
 Images/
-
-├── your dataset name/
-
-│ ├── train/
-
-│ │ │── 001.png
-
-│ │ │── 002.png
-
-│ │ │── ...
-
-│ ├── val/
-
-│ │ │── 012.png
-
-│ │ │── 050.png
-
-│ │ │── ...
-
+├── your_dataset_name/
+│   ├── train/
+│   │   ├── 001.png
+│   │   ├── 002.png
+│   │   └── ...
+│   ├── val/
+│   │   ├── 012.png
+│   │   ├── 050.png
+│   │   └── ...
+```
 
 Second, put your desrctiptions and labels into a .txt file, you can put it in `./description` folder. Each line is in the format of `description text, label`.
 
@@ -101,19 +92,14 @@ python SDM.py --image_folder /path/to/images --out_folder /path/to/output --des_
 
 ```
 In the last, the structure of the `output` folder is as follows:
-
+```bash
 output/
-
 │── mask/  # mask of the instance segmentation task
-
 │── labels/  # label of the instance segmentation task in YOLO format
-
 │── visual_new/  # visual of the instance segmentation task (SDM-D.py)
-
 │── visual_all/  # visual of all masks of an image
-
 │── json/  # json of the instance segmentation task
-
+```
 (2) If you want to get colorful visual results, please run SDM-D.py. You can set the colors what you want in SDM-D.py line 53-70 and 84-103.
 
 ```bash
