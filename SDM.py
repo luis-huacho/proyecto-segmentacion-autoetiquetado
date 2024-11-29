@@ -3,6 +3,9 @@ import torch
 import os
 import open_clip
 
+import sys
+sys.path.insert(0, os.path.join(os.getcwd(), 'sam2'))
+
 from sam2.build_sam import build_sam2
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 

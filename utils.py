@@ -335,9 +335,13 @@ def generate_all_sam_mask(mask_generator, image_folder, masks_segs_folder, json_
 
                 masks2 = mask_generator.generate(image)
                 sorted_anns = sorted(masks2, key=(lambda x: x['area']), reverse=True)
-                save_mask(sorted_anns, path_img_idx)
+                
                 if enable_mask_nms:
                     sorted_anns = filter_masks_by_overlap(sorted_anns, mask_nms_thresh)
+                    save_mask(sorted_anns, path_img_idx)
+                else:
+                    save_mask(sorted_anns, path_img_idx)
+                    
                 if save_anns:
                     show_anns(sorted_anns, image, path_img_idx_visual_all)
                 if save_json:
