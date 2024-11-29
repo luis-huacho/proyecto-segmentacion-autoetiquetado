@@ -242,7 +242,7 @@ def generate_all_sam_mask(mask_generator, image_folder, masks_segs_folder, json_
                 print(f"Error with file {img_file}: {e}")
                 continue
 
-def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, output_path, vis_output_path, label_out_dir, model, texts, labels, label_dict, opt):
+def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_output_path, vis_output_path, label_out_dir, model, texts, labels, label_dict, opt):
     for img_train_folder in os.listdir(image_folder):
         img_files = os.listdir(os.path.join(image_folder, img_train_folder))
         for img_file in img_files:
@@ -297,7 +297,7 @@ def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, output_
                     print(f"Error processing file {mask_path}, skipping. Error was {e}")
                     continue
 
-                filename = os.path.join(output_path, img_train_folder, f'{img_idx}.txt')
+                filename = os.path.join(label_output_path, img_train_folder, f'{img_idx}.txt')
                 os.makedirs(os.path.dirname(filename), exist_ok=True)
                 with open(filename, 'w') as f:
                     f.writelines(file_contents)

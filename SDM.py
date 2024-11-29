@@ -36,7 +36,7 @@ def main():
     mask_nms_thresh = opt.mask_nms_thresh
     masks_segs_folder = os.path.join(out_folder, 'mask')
     json_save_dir = os.path.join(out_folder, 'json')
-    output_path = os.path.join(out_folder, 'labels')
+    label_output_path = os.path.join(out_folder, 'labels')
     vis_output_path = os.path.join(out_folder, 'visual')
     label_out_dir = os.path.join(out_folder, 'label_visual')
     create_output_folders(out_folder)
@@ -60,7 +60,7 @@ def main():
     generate_all_sam_mask(mask_generator, image_folder, masks_segs_folder, json_save_dir, vis_output_path, enable_mask_nms, mask_nms_thresh, save_anns, save_json)
 
     # label assignment
-    label_assignment(clip_preprocessor, image_folder, masks_segs_folder, output_path, vis_output_path, label_out_dir, clip_model, texts, labels, label_dict, opt)
+    label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_output_path, vis_output_path, label_out_dir, clip_model, texts, labels, label_dict, opt)
 
 if __name__ == '__main__':
     main()

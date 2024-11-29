@@ -1,7 +1,7 @@
 # Learn from Foundation Model: Fruits Detection Model without Manual Annotation
 ## Segmentation-Description-Matching-Distilling
 
-**ZheCollege of Biosystems Engineering and Food Science, Zhejiang University, 
+**College of Biosystems Engineering and Food Science, Zhejiang University, 
 ZJU-Hangzhou Global Scientific and Technological Innovation Center**
 
 Yanan Wang, [Zhenghao Fei](https://github.com/ZhenghaoFei), Ruichen Li, Yibin Ying
@@ -96,11 +96,11 @@ In the last, the structure of the `output` folder is as follows:
 output/
 │── mask/  # mask of the instance segmentation task
 │── labels/  # label of the instance segmentation task in YOLO format
-│── visual_new/  # visual of the instance segmentation task (SDM-D.py)
+│── visual_new/  # visual of the instance segmentation task (SDM_mask_color.py)
 │── visual_all/  # visual of all masks of an image
 │── json/  # json of the instance segmentation task
 ```
-(2) If you want to get colorful visual results, please run SDM-D.py. You can set the colors what you want in SDM-D.py line 53-70 and 84-103.
+(2) If you want to get colorful visual results, please run SDM_mask_color.py. You can set the colors what you want in SDM-D.py line 53-70 and 84-103.
 
 ```bash
 python SDM_mask_color.py

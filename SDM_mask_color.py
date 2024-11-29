@@ -35,253 +35,24 @@ from sam2.build_sam import build_sam2
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 import json
 
-def final_visualization(image, anns, results, save_path):
-    fig, ax = plt.subplots(figsize=(20, 20))
-    ax.imshow(image)  
-    ax.set_autoscale_on(False)
-
-    ##Create an RGBA image for mask coloring
-    img_with_masks = image.copy()  ##Copy the original image for displaying the mask
-    overlay = np.zeros_like(img_with_masks, dtype=np.uint8)
-
-    ##Color each mask area and keep the color consistent with the label
-    for i, ann in enumerate(anns):
-        mask = ann['segmentation']
-        
-        # 获取标签并设置颜色  ##Get the label and set the color
-        label = ann['label']
-        if label == 'others':
-            color =  (252, 248, 187) ##Note that this is a value in the 0-255 range
-        elif label == 'waxberry':  
-            color = (229,76,94)  ##Pink
-        elif label == 'unripe':
-            color = (146, 208, 80)  ##Light green
-        elif label == 'leaf':
-            color = (0, 176, 80)  ##Green
-        elif label == 'stem':
-            color = (243, 163, 97)  ##Orange
-        elif label == 'flower':
-            color = (168, 218, 219)  ##Light yellow
-
-        ##Set the color of the target area to the corresponding label color
-        overlay[mask > 0] = color  
-
-    alpha = 0.4  # 掩码透明度  ##Mask transparency
-    img_with_masks = cv2.addWeighted(overlay, alpha, img_with_masks, 1 - alpha, 0)
-
-    # 显示带有掩码的图像  ##Display the image with the mask
-    ax.imshow(img_with_masks)
-
-    # 在图像上绘制边界框和标签  ##Draw the bounding box and label on the image
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 1.1
-    thickness = 2
-    font_color = (1, 1, 1)  ##White
-
-    for res in results:
-        # 设置每个标签的颜色 ##Set the color of each label
-        if res['label'] == 'others':
-            continue
-            box_color =   (252/255, 248/255, 187/255)
-            label_bg_color = (252/255, 248/255, 187/255)
-        elif res['label'] == 'waxberry':
-            box_color =(229/255, 76/255, 94/255)  ##Pink
-            
-            label_bg_color = (229/255, 76/255, 94/255)
-        elif res['label'] == 'unripe':
-            box_color = (146/255, 208/255, 80/255)  ##Light green
-            label_bg_color = (146/255, 208/255, 80/255)
-        elif res['label'] == 'leaf':
-            box_color = (0/255, 176/255, 80/255)  ##Green
-            label_bg_color = (0/255, 176/255, 80/255)
-        elif res['label'] == 'stem':
-            box_color = (243/255, 163/255, 97/255)  ##Orange
-            label_bg_color = (243/255, 163/255, 97/255)
-        elif res['label'] == 'flower':
-            box_color = (168/255, 218/255, 219/255)  ##Light yellow
-            label_bg_color = (168/255, 218/255, 219/255)
-
-        ##Draw the rectangle
-        rect = plt.Rectangle((res['xmin'], res['ymin']),
-                             res['xmax'] - res['xmin'],
-                             res['ymax'] - res['ymin'],
-                             linewidth=2, edgecolor=box_color, facecolor='none')
-        ax.add_patch(rect)
-
-        ##Draw the filled text box
-        ax.text(res['xmin'], res['ymin'] - 5, res['label'], color='white', fontsize=30,
-                ha='left', va='bottom', bbox=dict(facecolor=label_bg_color, edgecolor='none', boxstyle='round,pad=0'))
-
-    ##Save the final image
-    plt.axis('off')
-    plt.savefig(save_path)
-    print(save_path)
-    plt.close(fig)
+from utils import read_strawberry_descriptions, create_output_folders
+from utils import generate_all_sam_mask, label_assignment
 
 
 
-def mask_image(image, mask):
-    """Masks an image with a binary mask, retaining color in the masked area and setting
-       the rest to white.
-
-    Args:
-        image: The input image as a NumPy array.
-        mask: The binary mask as a NumPy array, where 255 represents the masked area.
-
-    Returns:
-        The masked image as a NumPy array.
-    """
-
-    masked_image = cv2.bitwise_and(image, image, mask=mask)
-    masked_image[mask == 0] = 255  # Set unmasked areas to white
-    return masked_image
 
 
-def save_mask(anns, path):
-
-    #sorted_anns = sorted(anns, key=(lambda x: x['area']), reverse=True)
-    for i, ann in enumerate(anns):
-        #a = ann['original_index']
-        mask = ann['segmentation']
-        mask = np.stack([mask]*3, axis=-1)  
-
-        img = (mask*255).astype(np.uint8)  
-        cv2.imwrite(f'{path}/mask_{i}.png', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-
-def show_anns(sorted_anns, image, save_path, borders=True):
-    if len(sorted_anns) == 0:
-        return
-    
-    fig, ax = plt.subplots(figsize=(20, 20))
-    ax.imshow(image)
-    ax.set_autoscale_on(False)
-
-    img = np.ones((sorted_anns[0]['segmentation'].shape[0], sorted_anns[0]['segmentation'].shape[1], 4))
-    img[:, :, 3] = 0
-    for i, ann in enumerate(sorted_anns):
-        m = ann['segmentation']
-        color_mask = np.concatenate([np.random.random(3), [0.5]])
-        img[m] = color_mask
-        if borders:
-            contours, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            contours = [cv2.approxPolyDP(contour, epsilon=0.01, closed=True) for contour in contours]
-            cv2.drawContours(img, contours, -1, (0, 0, 1, 0.4), thickness=1)
-
-        
-        y, x = np.mean(np.argwhere(m), axis=0).astype(int)
-        ax.text(x, y, str(i), color='white', fontsize=15, ha='center', va='center', weight='bold')
-
-    ax.imshow(img)
-    plt.axis('off')
-    plt.savefig(save_path)
-    plt.close(fig)
 
 
-def mask_iou(mask1, mask2):  
-    # Compute IoU for two masks  
-    intersection = np.logical_and(mask1, mask2).astype(np.float32).sum()  
-    union = np.logical_or(mask1, mask2).astype(np.float32).sum()  
-    return intersection / union if union > 0 else 0.0  
   
-def filter_masks_by_overlap(masks, threshold):
-    masks_np = [np.array(mask['segmentation'], dtype=np.bool) for mask in masks]
-    areas = [np.sum(mask) for mask in masks_np]
-    keep = torch.ones(len(masks_np), dtype=torch.bool)
-    scores = [mask['stability_score'] for mask in masks]
-    keep = torch.ones(len(masks_np), dtype=torch.bool)
-
-    ##Iterate over each mask
-    for i in range(len(masks_np)):
-        if not keep[i]:
-            continue
-        for j in range(i + 1, len(masks_np)):
-            if not keep[j]:
-                continue
-            
-            ##Calculate the intersection and IoU
-            intersection = np.logical_and(masks_np[i], masks_np[j]).astype(np.float32).sum()
-            smaller_area = min(areas[i], areas[j])
-            if intersection > threshold * smaller_area:
-                if scores[i] < scores[j]:
-                    keep[i] = False
-                else:
-                    keep[j] = False
-
-    ##Filtered masks
-    filtered_masks = [mask for idx, mask in enumerate(masks) if keep[idx]]
-    
-    return filtered_masks
-
-def crop_object_from_white_background(image):
-   """Crops an image with a white background to the minimal bounding box containing a non-white object.
-   """
-
-   img = Image.fromarray(image)
-
-   # Load the image
-   img_array = np.array(image)
-
-   # Find non-white pixels
-   non_white_mask = np.any(img_array != 255, axis=2)  # Check all color channels
-
-   # Find bounding box coordinates
-   ymin, xmin = np.where(non_white_mask)[0].min(), np.where(non_white_mask)[1].min()
-   ymax, xmax = np.where(non_white_mask)[0].max() + 1, np.where(non_white_mask)[1].max() + 1
-
-   # Crop the image
-   cropped_img = img.crop((xmin, ymin, xmax, ymax))
-
-   return cropped_img, xmin, ymin, xmax, ymax
 
 
-def convert_to_serializable(ann):
-    """Convert annotation to a JSON-serializable format."""
-    if isinstance(ann, dict):
-        return {k: convert_to_serializable(v) for k, v in ann.items()}
-    elif isinstance(ann, list):
-        return [convert_to_serializable(i) for i in ann]
-    elif isinstance(ann, np.ndarray):
-        return ann.tolist()
-    elif isinstance(ann, np.generic):
-        return ann.item()
-    else:
-        return ann
-
-def save_annotations(anns, path):
-    for i, ann in enumerate(anns):
-        simplified_ann = {
-            "area": ann['area'],
-            "bbox": ann['bbox'],
-            "predicted_iou": ann['predicted_iou'],
-            "point_coords": ann['point_coords'],
-            "stability_score": ann['stability_score'],
-            "crop_box": ann['crop_box']
-        }
-        ann_serializable = convert_to_serializable(simplified_ann)
-        with open(f'{path}/mask_{i}.json', 'w', encoding='utf-8') as f:
-            json.dump(ann_serializable, f, ensure_ascii=False, indent=2)
 
 
-def get_masked_image(mask_img_path):
-    
-    mask_img = cv2.imread(mask_img_path)[:, :, 0] 
-    masked_image = mask_image(rgb_image, mask_img)
-    return masked_image
 
 
-def clip_prediction(image_input, texts, labels):
-    text_tokens = tokenizer.tokenize(["This is " + desc for desc in texts])
 
-    with torch.no_grad():
-        image_features = model.encode_image(image_input).float()
-        text_features = model.encode_text(text_tokens).float()
 
-    image_features /= image_features.norm(dim=-1, keepdim=True)
-    text_features /= text_features.norm(dim=-1, keepdim=True)
-    similarity = text_features.cpu().numpy() @ image_features.cpu().numpy().T
-    label = labels[np.argmax(similarity)]
-    #print('第1轮标签', label)
-    return label
 
 
 
@@ -373,12 +144,12 @@ for img_train_folder in os.listdir(image_segs_folder):
             mask_img = cv2.imread(mask_path)[:, :, 0]
             masked_image = mask_image(rgb_image, mask_img)
             try:
-                masked_image = get_masked_image(mask_path)
+                masked_image = get_masked_image(rgb_image, mask_path)
                 image, xmin, ymin, xmax, ymax = crop_object_from_white_background(masked_image)
                 
                 image_preprocessed = preprocess(image)
                 image_input = torch.tensor(np.stack([image_preprocessed]))
-                label = clip_prediction(image_input, texts, labels)
+                label = clip_prediction(model, image_input, texts, labels)
                 label_num = label_dict[label]
                 results.append({"label": label, "xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
                 #file_contents.append(f'{label_num} ')
@@ -417,6 +188,6 @@ for img_train_folder in os.listdir(image_segs_folder):
         ##Save the final visualization result
         visual_dir = os.path.join(va_output_path, img_train_folder)
         os.makedirs(visual_dir, exist_ok=True)
-        final_visualization(rgb_image, masks, results, os.path.join(visual_dir, img_file))
+        mask_color_visualization(rgb_image, masks, results, os.path.join(visual_dir, img_file))
 
         print(filename, '  have been finished!')
