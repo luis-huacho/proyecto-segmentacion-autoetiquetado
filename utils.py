@@ -178,7 +178,11 @@ def mask_iou(mask1, mask2):
     return intersection / union if union > 0 else 0.0  
   
 def filter_masks_by_overlap(masks, threshold):
-    masks_np = [np.array(mask['segmentation'], dtype=np.bool) for mask in masks]
+    if np.__version__ >= '1.20':
+        bool_type = np.bool_  # 或 np.bool_
+    else:
+        bool_type = np.bool
+    masks_np = [np.array(mask['segmentation'], dtype=bool_type) for mask in masks]
     areas = [np.sum(mask) for mask in masks_np]
     keep = torch.ones(len(masks_np), dtype=torch.bool)
     scores = [mask['stability_score'] for mask in masks]
