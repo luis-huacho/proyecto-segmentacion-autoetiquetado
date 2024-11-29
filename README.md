@@ -96,20 +96,32 @@ In the last, the structure of the `output` folder is as follows:
 output/
 │── mask/  # mask of the instance segmentation task
 │── labels/  # label of the instance segmentation task in YOLO format
-│── visual_new/  # visual of the instance segmentation task (SDM_mask_color.py)
-│── visual_all/  # visual of all masks of an image
-│── json/  # json of the instance segmentation task
+│── mask_idx_visual/ # visual the mask ids 
+│── mask_color_visual/  # visual masks with color [need to set, see follows (2)]
+│── label_box_visual/  # visual detection boxed of masks [need to set, see follows (3)]
+│── json/  # json of the instance segmentation task [need to set, see follows (4)]
 ```
-(2) If you want to get colorful visual results, please run SDM_mask_color.py. You can set the colors what you want in SDM-D.py line 53-70 and 84-103.
+(2) If you want to get colorful visual results, you need to set the `mask_color_visual` as `Ture`. The visual results will be saved in `out_folder/mask_color_visual` folder.
 
 ```bash
-python SDM_mask_color.py
+python SDM.py --image_folder /path/to/images --out_folder /path/to/output --des_file /path/to/prompt.txt --mask_color_visual True
+```
+![SDM-D architecture](./asset/mask_visual.png)
+
+(3) If you want to visual the detection boxes, you need to set `'--box_visual'` as `True` or run:
+```bash
+python SDM.py --image_folder /path/to/images --out_folder /path/to/output --des_file /path/to/prompt.txt --box_visual True
+```
+(4) If you want to see the detail of masks, you can save their `.josn` file by set the `'--save_json'` as `True`:
+
+```bash
+python SDM.py --image_folder /path/to/images --out_folder /path/to/output --des_file /path/to/prompt.txt --save_json True
 ```
 
-(3) If you want to explore parameters that fit your own dataset, you can run `../notebook/SDM.ipynb`.
+(5) If you want to explore parameters that fit your own dataset, you can try `../notebook/SDM.ipynb`.
 
 
-### Label transfer
+### Label conversion
 
 (1) If you want to get object detection lables, just run:
 

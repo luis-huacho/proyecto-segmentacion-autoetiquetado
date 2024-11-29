@@ -23,8 +23,8 @@ def parse_opt(known=False):
     parser.add_argument('--enable_mask_nms', type=bool, default=True, required = False,  help='Whether to apply NMS to masks')
     parser.add_argument('--mask_nms_thresh', type=float, default=0.9, required = False, help='Threshold for NMS mask overlap')
     parser.add_argument('--save_anns', type=bool, default=True, required = False,  help='Whether to save mask anns')
-    parser.add_argument('--save_json', type=bool, default=True, required = False,  help='Whether to save json')
-    parser.add_argument('--box_visual', type=bool, default=True, required = False,  help='Whether to visual results')
+    parser.add_argument('--save_json', type=bool, default=False, required = False,  help='Whether to save json')
+    parser.add_argument('--box_visual', type=bool, default=False, required = False,  help='Whether to visual results')
     parser.add_argument('--mask_color_visual', type=bool, default=False, required = False,  help='Whether to visual mask results with color')
     return parser.parse_args()
 

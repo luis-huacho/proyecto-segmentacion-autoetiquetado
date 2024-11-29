@@ -12,10 +12,11 @@ from scipy.ndimage import label as label_region
 def box_visual(img_path, results, lable_box_visual_path, img_file):
     img_final = cv2.imread(img_path)
     font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 3
-    thickness = 5
+    font_scale = 1.2
+    thickness = 3
     for res in results:
-        if res['label'] == 'ripe' or res['label'] == 'unripe':
+        #if res['label'] == 'ripe' or res['label'] == 'unripe':
+        if res['label'] != 'others':
             cv2.rectangle(img_final, (res['xmin'], res['ymin']), (res['xmax'], res['ymax']), (76, 94, 229), 7)  # Red rectangles
 
             # Add label with white background
@@ -341,7 +342,7 @@ def generate_all_sam_mask(mask_generator, image_folder, masks_segs_folder, json_
                     save_mask(sorted_anns, path_img_idx)
                 else:
                     save_mask(sorted_anns, path_img_idx)
-                    
+
                 if save_anns:
                     show_anns(sorted_anns, image, path_img_idx_visual_all)
                 if save_json:
