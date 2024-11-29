@@ -195,7 +195,7 @@ def read_strawberry_descriptions(file_path):
 
 def create_output_folders(base_folder):
     # 子文件夹的名称
-    subfolders = ['mask', 'json', 'labels', 'visual', 'label_visual']
+    subfolders = ['mask', 'json', 'labels', 'mask_idx_visual', 'label_visual']
     
     # 遍历创建文件夹
     for folder in subfolders:
@@ -220,7 +220,7 @@ def generate_all_sam_mask(mask_generator, image_folder, masks_segs_folder, json_
                 path_img_idx = f'{masks_segs_folder}/{image_sub_folder}/{img_idx}'
                 os.makedirs(path_img_idx, exist_ok=True)
 
-                path_img_idx_visual_all = f'{vis_output_path}/{image_sub_folder}/{img_idx}'
+                path_img_idx_visual_all = f'{vis_output_path}/{image_sub_folder}/{img_file}'
                 os.makedirs(f'{vis_output_path}/{image_sub_folder}', exist_ok=True)
 
                 json_save_path = f'{json_save_dir}/{image_sub_folder}/{img_idx}'
@@ -242,7 +242,7 @@ def generate_all_sam_mask(mask_generator, image_folder, masks_segs_folder, json_
                 print(f"Error with file {img_file}: {e}")
                 continue
 
-def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_output_path, vis_output_path, label_out_dir, model, texts, labels, label_dict, opt):
+def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_output_path, label_box_visual_dir, model, texts, labels, label_dict, lable_box_visual):
     for img_train_folder in os.listdir(image_folder):
         img_files = os.listdir(os.path.join(image_folder, img_train_folder))
         for img_file in img_files:
@@ -302,7 +302,7 @@ def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_o
                 with open(filename, 'w') as f:
                     f.writelines(file_contents)
 
-            if opt.visual:
+            if lable_box_visual:
                 img_final = cv2.imread(img_path)
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 font_scale = 3
@@ -320,7 +320,7 @@ def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_o
                         # Add the text label with precise alignment
                         text_origin = (res['xmin'], res['ymin'] - baseline)
                         cv2.putText(img_final, res['label'], text_origin, font, font_scale, (76, 94, 229), thickness)                        
-                visual_dir = os.path.join(vis_output_path, img_train_folder)
-                os.makedirs(visual_dir, exist_ok=True)
-                cv2.imwrite(os.path.join(label_out_dir, img_file), img_final)
+                lable_box_visual_path = os.path.join(label_box_visual_dir, img_train_folder)
+                os.makedirs(lable_box_visual_path, exist_ok=True)
+                cv2.imwrite(os.path.join(lable_box_visual_path, img_file), img_final)
             print(filename,' lables generated!')

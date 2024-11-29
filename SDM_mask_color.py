@@ -39,34 +39,36 @@ from utils import read_strawberry_descriptions, create_output_folders
 from utils import generate_all_sam_mask, label_assignment
 
 
+def parse_opt(known=False):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--image_folder', type=str, default='./Images/strawberry', required = True, help='Path to the image segmentation folder')
+    parser.add_argument('--out_folder', type=str, default='./output/strawberry', required = True,help='Path to save mask outputs')
+    parser.add_argument('--des_file', type=str, default='./description/straw_des.txt', required = True,help='Path to your prompt texts')
+    parser.add_argument('--sam2_checkpoint', type=str, default="./checkpoints/sam2_hiera_large.pt", required = False, help='SAM2 model checkpoint path')
+    parser.add_argument('--model_cfg', type=str, default="sam2_hiera_l.yaml", required = False, help='SAM2 model config file')
+    parser.add_argument('--enable_mask_nms', type=bool, default=True, required = False,  help='Whether to apply NMS to masks')
+    parser.add_argument('--mask_nms_thresh', type=float, default=0.9, required = False, help='Threshold for NMS mask overlap')
+    parser.add_argument('--save_anns', type=bool, default=True, required = False,  help='Whether to save mask anns')
+    parser.add_argument('--save_json', type=bool, default=True, required = False,  help='Whether to save json')
+    parser.add_argument('--visual', type=bool, default=True, required = False,  help='Whether to visual results')
+    return parser.parse_args()
 
-
-
-
-
-  
-
-
-
-
-
-
-
-
-
+def main():
+    opt = parse_opt()
+    image_folder = opt.image_folder
+    out_folder = opt.out_folder
+    enable_mask_nms = opt.enable_mask_nms
+    save_anns = opt.save_anns
+    save_json = opt.save_json
+    mask_nms_thresh = opt.mask_nms_thresh
+    masks_segs_folder = os.path.join(out_folder, 'mask')
+    json_save_dir = os.path.join(out_folder, 'json')
+    label_output_path = os.path.join(out_folder, 'labels')
 
 
 ##prompt of strawberry
-texts = [
-"a red strawberry with numerous points",
-"a pale green strawberry with numerous points",
-"a green veined leaf with white points",
-"a long and thin stem",
-"a white flower",
-"soil or background or something else",
-]
-labels = ['ripe', 'unripe', 'leaf','stem','flower','others']
-label_dict = {"ripe": 0, "unripe": 1, "leaf": 2, "stem": 3, "flower": 4,"others": 5}
+texts, labels, label_dict = read_strawberry_descriptions(opt.des_file)  
+
 
 
 
