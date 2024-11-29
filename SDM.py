@@ -21,7 +21,8 @@ def parse_opt(known=False):
     parser.add_argument('--mask_nms_thresh', type=float, default=0.9, required = False, help='Threshold for NMS mask overlap')
     parser.add_argument('--save_anns', type=bool, default=True, required = False,  help='Whether to save mask anns')
     parser.add_argument('--save_json', type=bool, default=True, required = False,  help='Whether to save json')
-    parser.add_argument('--visual', type=bool, default=True, required = False,  help='Whether to visual results')
+    parser.add_argument('--box_visual', type=bool, default=True, required = False,  help='Whether to visual results')
+    parser.add_argument('--mask_color_visual', type=bool, default=False, required = False,  help='Whether to visual mask results with color')
     return parser.parse_args()
 
 
@@ -33,13 +34,16 @@ def main():
     enable_mask_nms = opt.enable_mask_nms
     save_anns = opt.save_anns
     save_json = opt.save_json
-    lable_box_visual = opt.visual
+    mask_color = opt.mask_color_visual
+    lable_box_visual = opt.box_visual
     mask_nms_thresh = opt.mask_nms_thresh
     masks_segs_folder = os.path.join(out_folder, 'mask')
     json_save_dir = os.path.join(out_folder, 'json')
     label_output_path = os.path.join(out_folder, 'labels')
     mask_ids_visual_folder = os.path.join(out_folder, 'mask_idx_visual')
-    label_box_visual_dir = os.path.join(out_folder, 'label_visual')
+    label_box_visual_dir = os.path.join(out_folder, 'label_box_visual')
+    mask_color_visual_dir = os.path.join(out_folder, 'mask_color_visual')
+
     create_output_folders(out_folder)
     texts, labels, label_dict = read_strawberry_descriptions(opt.des_file)  
 
@@ -61,7 +65,7 @@ def main():
     generate_all_sam_mask(mask_generator, image_folder, masks_segs_folder, json_save_dir, mask_ids_visual_folder, enable_mask_nms, mask_nms_thresh, save_anns, save_json)
 
     # label assignment
-    label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_output_path, label_box_visual_dir, clip_model, texts, labels, label_dict, lable_box_visual)
+    label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_output_path, label_box_visual_dir, mask_color_visual_dir, clip_model, texts, labels, label_dict, lable_box_visual, mask_color)
 
 if __name__ == '__main__':
     main()

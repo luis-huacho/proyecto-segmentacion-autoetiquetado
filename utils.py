@@ -8,6 +8,113 @@ import os
 from open_clip import tokenizer
 from scipy.ndimage import label as label_region
 
+
+def box_visual(img_path, results, lable_box_visual_path, img_file):
+    img_final = cv2.imread(img_path)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 3
+    thickness = 5
+    for res in results:
+        if res['label'] == 'ripe' or res['label'] == 'unripe':
+            cv2.rectangle(img_final, (res['xmin'], res['ymin']), (res['xmax'], res['ymax']), (76, 94, 229), 7)  # Red rectangles
+
+            # Add label with white background
+            (label_width, label_height), baseline = cv2.getTextSize(res['label'], font, font_scale, thickness)
+            top_left = (res['xmin'], res['ymin'] - label_height - baseline)
+            bottom_right = (res['xmin'] + label_width, res['ymin'] - baseline)
+            cv2.rectangle(img_final, top_left, bottom_right, (255, 255, 255), cv2.FILLED)
+                
+            # Add the text label with precise alignment
+            text_origin = (res['xmin'], res['ymin'] - baseline)
+            cv2.putText(img_final, res['label'], text_origin, font, font_scale, (76, 94, 229), thickness)                        
+        
+        cv2.imwrite(os.path.join(lable_box_visual_path, img_file), img_final)
+    
+
+def mask_color_visualization(image, anns, results, mask_color_save_path):
+    fig, ax = plt.subplots(figsize=(20, 20))
+    ax.imshow(image)  # 显示原始图像
+    ax.set_autoscale_on(False)
+
+    # 创建一个 RGBA 图像用于掩码着色
+    img_with_masks = image.copy()  # 复制原始图像，用于显示掩码
+    overlay = np.zeros_like(img_with_masks, dtype=np.uint8)
+
+    # 为每个掩码区域着色，并保持颜色与标签一致
+    for i, ann in enumerate(anns):
+        mask = ann['segmentation']
+        
+        # 获取标签并设置颜色
+        label = ann['label']
+        if label == 'others':
+            color =  (252, 248, 187) # 注意这里是0-255范围的值，因为下面要赋给overlay
+        elif label == 'ripe':  
+            color = (229,76,94)  # 粉色  (229/255, 76/255, 94/255)   #lemon (254,251,177)
+        elif label == 'unripe':
+            color = (146, 208, 80)  # 浅绿色
+        elif label == 'leaf':
+            color = (0, 176, 80)  # 绿色
+        elif label == 'stem':
+            color = (243, 163, 97)  # 橙色
+        elif label == 'flower':
+            color = (168, 218, 219)  # 浅黄色
+
+        # 将目标区域设置为指定颜色
+        overlay[mask > 0] = color  # 将掩码区域的颜色设置为对应的标签颜色
+
+    # 将掩码叠加到原始图像上
+    alpha = 0.4  # 掩码透明度
+    img_with_masks = cv2.addWeighted(overlay, alpha, img_with_masks, 1 - alpha, 0)
+
+    # 显示带有掩码的图像
+    ax.imshow(img_with_masks)
+
+    # 在图像上绘制边界框和标签
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 1.1
+    thickness = 2
+    font_color = (1, 1, 1)  # 白色
+
+    for res in results:
+        # 设置每个标签的颜色
+        if res['label'] == 'others':
+            continue
+            box_color =   (252/255, 248/255, 187/255)
+            label_bg_color = (252/255, 248/255, 187/255)
+        elif res['label'] == 'ripe':
+            box_color =(229/255, 76/255, 94/255)
+            #(229/255, 76/255, 94/255)  # 粉色
+            label_bg_color = (229/255, 76/255, 94/255)
+        elif res['label'] == 'unripe':
+            box_color = (146/255, 208/255, 80/255)  # 浅绿色
+            label_bg_color = (146/255, 208/255, 80/255)
+        elif res['label'] == 'leaf':
+            box_color = (0/255, 176/255, 80/255)  # 绿色
+            label_bg_color = (0/255, 176/255, 80/255)
+        elif res['label'] == 'stem':
+            box_color = (243/255, 163/255, 97/255)  # 橙色
+            label_bg_color = (243/255, 163/255, 97/255)
+        elif res['label'] == 'flower':
+            box_color = (168/255, 218/255, 219/255)  # 浅黄色
+            label_bg_color = (168/255, 218/255, 219/255)
+
+        # 绘制矩形框
+        rect = plt.Rectangle((res['xmin'], res['ymin']),
+                             res['xmax'] - res['xmin'],
+                             res['ymax'] - res['ymin'],
+                             linewidth=2, edgecolor=box_color, facecolor='none')
+        ax.add_patch(rect)
+
+        # 绘制填充文本框
+        ax.text(res['xmin'], res['ymin'] - 5, res['label'], color='white', fontsize=30,
+                ha='left', va='bottom', bbox=dict(facecolor=label_bg_color, edgecolor='none', boxstyle='round,pad=0'))
+
+    # 保存最终的图像
+    plt.axis('off')
+    plt.savefig(mask_color_save_path)
+    print(mask_color_save_path)
+    plt.close(fig)
+
 def mask_image(image, mask):
     """Masks an image with a binary mask, retaining color in the masked area and setting
        the rest to white.
@@ -195,7 +302,7 @@ def read_strawberry_descriptions(file_path):
 
 def create_output_folders(base_folder):
     # 子文件夹的名称
-    subfolders = ['mask', 'json', 'labels', 'mask_idx_visual', 'label_visual']
+    subfolders = ['mask', 'json', 'labels', 'mask_idx_visual', 'label_box_visual', 'mask_color_visual']
     
     # 遍历创建文件夹
     for folder in subfolders:
@@ -242,7 +349,7 @@ def generate_all_sam_mask(mask_generator, image_folder, masks_segs_folder, json_
                 print(f"Error with file {img_file}: {e}")
                 continue
 
-def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_output_path, label_box_visual_dir, model, texts, labels, label_dict, lable_box_visual):
+def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_output_path, label_box_visual_dir, mask_color_visual_dir, model, texts, labels, label_dict, lable_box_visual, mask_color):
     for img_train_folder in os.listdir(image_folder):
         img_files = os.listdir(os.path.join(image_folder, img_train_folder))
         for img_file in img_files:
@@ -254,6 +361,7 @@ def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_o
             results = []
             mask_seg_folder = os.path.join(masks_segs_folder, img_train_folder, img_idx)
             file_contents = []
+            masks = []
             
             for file in os.listdir(mask_seg_folder):
                 mask_path = os.path.join(mask_seg_folder, file)
@@ -293,6 +401,13 @@ def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_o
                     line += '\n'
                     file_contents.append(line)
 
+                    if mask_color:
+                        masks.append({
+                        'segmentation': mask_img,
+                        'area': np.sum(mask_img),
+                        'label': label
+                    })
+
                 except Exception as e:
                     print(f"Error processing file {mask_path}, skipping. Error was {e}")
                     continue
@@ -303,24 +418,13 @@ def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_o
                     f.writelines(file_contents)
 
             if lable_box_visual:
-                img_final = cv2.imread(img_path)
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                font_scale = 3
-                thickness = 5
-                for res in results:
-                    if res['label'] == 'ripe' or res['label'] == 'unripe':
-                        cv2.rectangle(img_final, (res['xmin'], res['ymin']), (res['xmax'], res['ymax']), (76, 94, 229), 7)  # Red rectangles
-
-                        # Add label with white background
-                        (label_width, label_height), baseline = cv2.getTextSize(res['label'], font, font_scale, thickness)
-                        top_left = (res['xmin'], res['ymin'] - label_height - baseline)
-                        bottom_right = (res['xmin'] + label_width, res['ymin'] - baseline)
-                        cv2.rectangle(img_final, top_left, bottom_right, (255, 255, 255), cv2.FILLED)
-                
-                        # Add the text label with precise alignment
-                        text_origin = (res['xmin'], res['ymin'] - baseline)
-                        cv2.putText(img_final, res['label'], text_origin, font, font_scale, (76, 94, 229), thickness)                        
                 lable_box_visual_path = os.path.join(label_box_visual_dir, img_train_folder)
                 os.makedirs(lable_box_visual_path, exist_ok=True)
-                cv2.imwrite(os.path.join(lable_box_visual_path, img_file), img_final)
+                box_visual(img_path, results, lable_box_visual_path, img_file)
+            if mask_color:
+                mask_color_visual_subdir = os.path.join(mask_color_visual_dir, img_train_folder)
+                os.makedirs(mask_color_visual_subdir, exist_ok=True)
+                mask_color_save_path = os.path.join(mask_color_visual_subdir, img_file)
+                mask_color_visualization(rgb_image, masks, results, mask_color_save_path)
+
             print(filename,' lables generated!')

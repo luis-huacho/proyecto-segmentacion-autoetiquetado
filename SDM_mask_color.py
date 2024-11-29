@@ -35,7 +35,7 @@ from sam2.build_sam import build_sam2
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 import json
 
-from utils import read_strawberry_descriptions, create_output_folders
+from utils import read_strawberry_descriptions, create_output_folders, mask_color_visualization
 from utils import generate_all_sam_mask, label_assignment
 
 
@@ -190,6 +190,7 @@ for img_train_folder in os.listdir(image_segs_folder):
         ##Save the final visualization result
         visual_dir = os.path.join(va_output_path, img_train_folder)
         os.makedirs(visual_dir, exist_ok=True)
-        mask_color_visualization(rgb_image, masks, results, os.path.join(visual_dir, img_file))
+        mask_color_save_path = os.path.join(visual_dir, img_file)
+        mask_color_visualization(rgb_image, masks, results, mask_color_save_path)
 
         print(filename, '  have been finished!')
