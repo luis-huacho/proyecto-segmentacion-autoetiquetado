@@ -52,7 +52,7 @@ cd checkpoints
 ./download_ckpts.sh
 ```
 
-The model in SDM is - [sam2_hiera_large.pt](https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_large.pt), you can also download this only.
+The model in SDM is: [sam2_hiera_large.pt](https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_large.pt), you can also download this only.
 
 2) The OpenCLIP can be utilized with `open_clip.create_model_and_transforms`,  and the model name and corresponding pretrained keys are compatible with the outputs of open_clip.list_pretrained().
 
