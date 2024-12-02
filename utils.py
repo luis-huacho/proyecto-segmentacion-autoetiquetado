@@ -280,22 +280,22 @@ def clip_prediction(model, image_input, texts, labels):
     label = labels[np.argmax(similarity)]
     return label
 
-def read_strawberry_descriptions(file_path):
+def load_descriptions(file_path):
     texts = []
     labels = []
     label_dict = {}
-    current_label = 0  # 用于给标签分配编号
-    
+    current_label = 0  
+
     with open(file_path, 'r') as f:
         lines = f.readlines()
         for line in lines:
-            # 假设每行格式是： '提示词, 标签'
+            # for each line: description, class
             parts = line.strip().split(',')
-            if len(parts) == 2:  # 确保每行有两个部分
-                text = parts[0].strip()  # 提示词
-                label = parts[1].strip()  # 标签
+            if len(parts) == 2:  # 
+                text = parts[0].strip()  # description
+                label = parts[1].strip()  # class
                 
-                # 如果标签不在字典中，自动添加到字典并分配编号
+                # if label not in dict, add it to dict and assign a number
                 if label not in label_dict:
                     label_dict[label] = current_label
                     current_label += 1
@@ -308,10 +308,9 @@ def read_strawberry_descriptions(file_path):
     return texts, labels, label_dict
 
 def create_output_folders(base_folder):
-    # 子文件夹的名称
     subfolders = ['mask', 'json', 'labels', 'mask_idx_visual', 'label_box_visual', 'mask_color_visual']
     
-    # 遍历创建文件夹
+    # create folders
     for folder in subfolders:
         folder_path = os.path.join(base_folder, folder)
         os.makedirs(folder_path, exist_ok=True)
