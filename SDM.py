@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.getcwd(), 'sam2'))
 from sam2.build_sam import build_sam2
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
-from utils import read_strawberry_descriptions, create_output_folders
+from utils import load_descriptions, create_output_folders
 from utils import generate_all_sam_mask, label_assignment
 
 # Parse arguments
@@ -48,7 +48,7 @@ def main():
     mask_color_visual_dir = os.path.join(out_folder, 'mask_color_visual')
 
     create_output_folders(out_folder)
-    texts, labels, label_dict = read_strawberry_descriptions(opt.des_file)  
+    texts, labels, label_dict = load_descriptions(opt.des_file)  
 
     # Init openCLIP model
     torch.cuda.set_device(0)
