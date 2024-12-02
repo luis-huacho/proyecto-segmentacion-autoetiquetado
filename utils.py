@@ -7,6 +7,7 @@ import json
 import os
 from open_clip import tokenizer
 from scipy.ndimage import label as label_region
+from pathlib import Path
 
 
 def box_visual(img_path, results, lable_box_visual_path, img_file):
@@ -116,6 +117,7 @@ def mask_color_visualization(image, anns, results, mask_color_save_path):
     print(mask_color_save_path)
     plt.close(fig)
 
+
 def mask_image(image, mask):
     """Masks an image with a binary mask, retaining color in the masked area and setting
        the rest to white.
@@ -160,7 +162,7 @@ def show_anns(sorted_anns, image, save_path, borders=True):
         if borders:
             contours, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
             contours = [cv2.approxPolyDP(contour, epsilon=0.01, closed=True) for contour in contours]
-            cv2.drawContours(img, contours, -1, (0, 0, 1, 0.4), thickness=1)
+            cv2.drawContours(img, contours, -1, (0, 0, 1, 0.4), thickness=3)
 
         # 标注掩码的索引
         y, x = np.mean(np.argwhere(m), axis=0).astype(int)
@@ -358,73 +360,82 @@ def generate_all_sam_mask(mask_generator, image_folder, masks_segs_folder, json_
                 print(f"Error with file {img_file}: {e}")
                 continue
 
-def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_output_path, label_box_visual_dir, mask_color_visual_dir, model, texts, labels, label_dict, lable_box_visual, mask_color):
+def image_label_get(img_path, mask_out_folder, clip_preprocessor, model, texts, labels, label_dict, mask_color, label_out_path):
+    image = Image.open(img_path).convert('RGB')
+    rgb_image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+    img_width, img_height = image.size
+    results = []
+    
+    file_contents = []
+    masks = []
+    for file in os.listdir(mask_out_folder):
+        mask_path = os.path.join(mask_out_folder, file)
+        mask = cv2.imread(mask_path, 0)
+        labelled_mask, num_labels = label_region(mask)
+        region_sizes = np.bincount(labelled_mask.flat)
+        region_sizes[0] = 0
+
+        mask_img = cv2.imread(mask_path)[:, :, 0]
+        masked_image = mask_image(rgb_image, mask_img)
+        
+        try:
+            masked_image = get_masked_image(rgb_image, mask_path)
+            image, xmin, ymin, xmax, ymax = crop_object_from_white_background(masked_image)
+            
+            image_preprocessed = clip_preprocessor(image)
+            image_input = torch.tensor(np.stack([image_preprocessed]))
+            label = clip_prediction(model, image_input, texts, labels)
+            label_num = label_dict[label]
+            results.append({"label": label, "xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
+            #file_contents.append(f'{label_num} ')
+            line = f'{label_num}'
+
+            for region_label in range(1, num_labels+1):
+                mask_cur = ((labelled_mask == region_label) * 255).astype(np.uint8)
+                contours, _ = cv2.findContours(mask_cur, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+                c = max(contours, key=cv2.contourArea)
+                c = c.reshape(-1, 2)
+                num_points = len(c)
+                skip = num_points // 300
+                skip = max(1, skip)
+                approx_sparse = c[::skip]
+                bottom_point_index = np.argmax(approx_sparse[:, 1])
+                sorted_points = np.concatenate([approx_sparse[bottom_point_index:], approx_sparse[:bottom_point_index]])
+                line += ' ' + ' '.join(f'{format(point[0]/img_width, ".6f")} {format(point[1]/img_height, ".6f")}' for point in sorted_points)
+                
+            line += '\n'
+            file_contents.append(line)
+            
+
+            if mask_color:
+                masks.append({
+                'segmentation': mask_img,
+                'area': np.sum(mask_img),
+                'label': label
+            })
+
+        except Exception as e:
+            print(f"Error processing file {mask_path}, skipping. Error was {e}")
+            continue
+
+        
+        
+        with open(label_out_path, 'w') as f:
+            f.writelines(file_contents)
+    return   masks, results, rgb_image
+
+def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_output_dir, label_box_visual_dir, mask_color_visual_dir, model, texts, labels, label_dict, lable_box_visual, mask_color):
     for img_train_folder in os.listdir(image_folder):
         img_files = os.listdir(os.path.join(image_folder, img_train_folder))
         for img_file in img_files:
-            img_idx, suffix = os.path.splitext(img_file)
-            img_path = os.path.join(image_folder, img_train_folder, img_file)
-            image = Image.open(img_path).convert('RGB')
-            rgb_image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
-            img_width, img_height = image.size
-            results = []
-            mask_seg_folder = os.path.join(masks_segs_folder, img_train_folder, img_idx)
-            file_contents = []
-            masks = []
+            img_idx = Path(img_file).stem
             
-            for file in os.listdir(mask_seg_folder):
-                mask_path = os.path.join(mask_seg_folder, file)
-                mask = cv2.imread(mask_path, 0)
-                labelled_mask, num_labels = label_region(mask)
-                region_sizes = np.bincount(labelled_mask.flat)
-                region_sizes[0] = 0
+            img_path = os.path.join(image_folder, img_train_folder, img_file)
+            mask_seg_folder = os.path.join(masks_segs_folder, img_train_folder, img_idx)
+            label_out_path = os.path.join(label_output_dir, img_train_folder, f'{img_idx}.txt')
+            os.makedirs(os.path.dirname(label_out_path), exist_ok=True)
 
-                mask_img = cv2.imread(mask_path)[:, :, 0]
-                masked_image = mask_image(rgb_image, mask_img)
-                
-                try:
-                    masked_image = get_masked_image(rgb_image, mask_path)
-                    image, xmin, ymin, xmax, ymax = crop_object_from_white_background(masked_image)
-                    
-                    image_preprocessed = clip_preprocessor(image)
-                    image_input = torch.tensor(np.stack([image_preprocessed]))
-                    label = clip_prediction(model, image_input, texts, labels)
-                    label_num = label_dict[label]
-                    results.append({"label": label, "xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
-                    #file_contents.append(f'{label_num} ')
-                    line = f'{label_num}'
-
-                    for region_label in range(1, num_labels+1):
-                        mask_cur = ((labelled_mask == region_label) * 255).astype(np.uint8)
-                        contours, _ = cv2.findContours(mask_cur, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-                        c = max(contours, key=cv2.contourArea)
-                        c = c.reshape(-1, 2)
-                        num_points = len(c)
-                        skip = num_points // 300
-                        skip = max(1, skip)
-                        approx_sparse = c[::skip]
-                        bottom_point_index = np.argmax(approx_sparse[:, 1])
-                        sorted_points = np.concatenate([approx_sparse[bottom_point_index:], approx_sparse[:bottom_point_index]])
-                        line += ' ' + ' '.join(f'{format(point[0]/img_width, ".6f")} {format(point[1]/img_height, ".6f")}' for point in sorted_points)
-                        
-                    line += '\n'
-                    file_contents.append(line)
-
-                    if mask_color:
-                        masks.append({
-                        'segmentation': mask_img,
-                        'area': np.sum(mask_img),
-                        'label': label
-                    })
-
-                except Exception as e:
-                    print(f"Error processing file {mask_path}, skipping. Error was {e}")
-                    continue
-
-                filename = os.path.join(label_output_path, img_train_folder, f'{img_idx}.txt')
-                os.makedirs(os.path.dirname(filename), exist_ok=True)
-                with open(filename, 'w') as f:
-                    f.writelines(file_contents)
+            masks, results, rgb_image = image_label_get(img_path, mask_seg_folder, clip_preprocessor, model, texts, labels, label_dict, mask_color,label_out_path)
 
             if lable_box_visual:
                 lable_box_visual_path = os.path.join(label_box_visual_dir, img_train_folder)
@@ -436,4 +447,4 @@ def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_o
                 mask_color_save_path = os.path.join(mask_color_visual_subdir, img_file)
                 mask_color_visualization(rgb_image, masks, results, mask_color_save_path)
 
-            print(filename,' lables generated!')
+            print(label_out_path,' lables generated!')
