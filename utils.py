@@ -421,7 +421,7 @@ def image_label_get(img_path, mask_out_folder, clip_preprocessor, model, texts, 
         
         with open(label_out_path, 'w') as f:
             f.writelines(file_contents)
-    return   masks, results, rgb_image
+    return masks, results, rgb_image
 
 def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_output_dir, label_box_visual_dir, mask_color_visual_dir, model, texts, labels, label_dict, lable_box_visual, mask_color):
     for img_train_folder in os.listdir(image_folder):
