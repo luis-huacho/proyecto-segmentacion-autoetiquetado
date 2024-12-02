@@ -1,23 +1,15 @@
 import argparse
-import numpy as np
 import torch
-import cv2
 import os
-from pathlib import Path
-import sys
-sys.path.append('your/path/to/SDM-D/sam2')
-
-#print(torch.cuda.current_device())
-
-import random
-from PIL import Image
-from collections import OrderedDict
 import open_clip
+
+import sys
+sys.path.insert(0, os.path.join(os.getcwd(), 'sam2'))
 
 from sam2.build_sam import build_sam2
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
-from utils import mask_image, save_mask, show_anns, filter_masks_by_overlap, crop_object_from_white_background, save_annotations, get_masked_image, clip_prediction, read_strawberry_descriptions, create_output_folders
+from utils import read_strawberry_descriptions, create_output_folders
 from utils import generate_all_sam_mask, label_assignment
 
 # Parse arguments
@@ -31,8 +23,9 @@ def parse_opt(known=False):
     parser.add_argument('--enable_mask_nms', type=bool, default=True, required = False,  help='Whether to apply NMS to masks')
     parser.add_argument('--mask_nms_thresh', type=float, default=0.9, required = False, help='Threshold for NMS mask overlap')
     parser.add_argument('--save_anns', type=bool, default=True, required = False,  help='Whether to save mask anns')
-    parser.add_argument('--save_json', type=bool, default=True, required = False,  help='Whether to save json')
-    parser.add_argument('--visual', type=bool, default=True, required = False,  help='Whether to visual results')
+    parser.add_argument('--save_json', type=bool, default=False, required = False,  help='Whether to save json')
+    parser.add_argument('--box_visual', type=bool, default=False, required = False,  help='Whether to visual results')
+    parser.add_argument('--mask_color_visual', type=bool, default=False, required = False,  help='Whether to visual mask results with color')
     return parser.parse_args()
 
 
@@ -44,12 +37,16 @@ def main():
     enable_mask_nms = opt.enable_mask_nms
     save_anns = opt.save_anns
     save_json = opt.save_json
+    mask_color = opt.mask_color_visual
+    lable_box_visual = opt.box_visual
     mask_nms_thresh = opt.mask_nms_thresh
     masks_segs_folder = os.path.join(out_folder, 'mask')
     json_save_dir = os.path.join(out_folder, 'json')
-    output_path = os.path.join(out_folder, 'labels')
-    vis_output_path = os.path.join(out_folder, 'visual')
-    label_out_dir = os.path.join(out_folder, 'label_visual')
+    label_output_path = os.path.join(out_folder, 'labels')
+    mask_ids_visual_folder = os.path.join(out_folder, 'mask_idx_visual')
+    label_box_visual_dir = os.path.join(out_folder, 'label_box_visual')
+    mask_color_visual_dir = os.path.join(out_folder, 'mask_color_visual')
+
     create_output_folders(out_folder)
     texts, labels, label_dict = read_strawberry_descriptions(opt.des_file)  
 
@@ -68,10 +65,10 @@ def main():
     print(f'Your enable_mask_nms is {opt.enable_mask_nms} !')
 
     # generate all masks
-    generate_all_sam_mask(mask_generator, image_folder, masks_segs_folder, json_save_dir, vis_output_path, enable_mask_nms, mask_nms_thresh, save_anns, save_json)
+    generate_all_sam_mask(mask_generator, image_folder, masks_segs_folder, json_save_dir, mask_ids_visual_folder, enable_mask_nms, mask_nms_thresh, save_anns, save_json)
 
     # label assignment
-    label_assignment(clip_preprocessor, image_folder, masks_segs_folder, output_path, vis_output_path, label_out_dir, clip_model, texts, labels, label_dict, opt)
+    label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_output_path, label_box_visual_dir, mask_color_visual_dir, clip_model, texts, labels, label_dict, lable_box_visual, mask_color)
 
 if __name__ == '__main__':
     main()

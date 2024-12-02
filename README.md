@@ -1,17 +1,20 @@
-# Learn from Foundation Model: Fruits Detection Model without Manual Annotation
+# Learn from Foundation Model: Fruit Detection Model without Manual Annotation
 ## Segmentation-Description-Matching-Distilling
 
-**Zhejiang University, ZJU-Hangzhou Global Scientific and Technological 
-Innovation Center**
+**College of Biosystems Engineering and Food Science, Zhejiang University; 
+ZJU-Hangzhou Global Scientific and Technological Innovation Center**
 
 Yanan Wang, [Zhenghao Fei](https://github.com/ZhenghaoFei), Ruichen Li, Yibin Ying
 
 [[`Paper`](
-https://doi.org/10.48550/arXiv.2411.16196)] [[`Project`](https://github.com/AgRoboticsResearch/SDM-D.git)]  [[`Dataset`](https://github.com/00mmw/MegaFruits.git)]
+https://doi.org/10.48550/arXiv.2411.16196)] [[`Project`](https://github.com/AgRoboticsResearch/SDM-D.git)]  [[`Dataset`](https://github.com/00mmw/MegaFruits.git)] [![Colab](https://img.shields.io/static/v1?label=Demo&message=Colab&color=orange)](https://colab.research.google.com/drive/1Mwf_u9TezN0gSjdstvsUVi4e0knsiwo2?usp=drive_link)
 
 ![SDM-D architecture](./asset/1-all2.png)
 
 **🍄Segmentation-Description-Matching-Distilling** is a framework designed to distill small models that enable panoramic perception of complex agricultural scenes from foundation models without relying on manual labels. At its core is SDM, which operates without pre-training or significant resource consumption, within a segment-then-prompt paradigm. SDM demonstrates strong zero-shot performance across various fruit detection tasks (object detection, semantic segmentation, and instance segmentation), consistently outperforming SOTA OVD methods across various fruit perception tasks, demonstrating superior dexterity and generality.
+
+## 🔥Colab try
+We provide a Google's Colab example [![Colab](https://img.shields.io/static/v1?label=Demo&message=Colab&color=orange)](https://colab.research.google.com/drive/1Mwf_u9TezN0gSjdstvsUVi4e0knsiwo2?usp=drive_link), where anyone can use our project quickly and easily.
 
 ## 🍇Installation
 ### 1. Prepare the environment
@@ -21,7 +24,7 @@ First, install PyTorch suitable for your machine, as well as small additional de
 conda create -n SDM python=3.10
 conda activate SDM
 pip install torch torchvision # install the torch you need
-git clone --recurse-submodules https://github.com/AgRoboticsResearch/SDM-D.git
+git clone  https://github.com/AgRoboticsResearch/SDM-D.git
 cd SDM-D
 pip install -r requirements.txt
 ```
@@ -52,7 +55,7 @@ cd checkpoints
 ./download_ckpts.sh
 ```
 
-The model in SDM is - [sam2_hiera_large.pt](https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_large.pt), you can also download this only.
+The model in SDM is: [sam2_hiera_large.pt](https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_large.pt), you can also download this only.
 
 2) The OpenCLIP can be utilized with `open_clip.create_model_and_transforms`,  and the model name and corresponding pretrained keys are compatible with the outputs of open_clip.list_pretrained().
 
@@ -68,62 +71,60 @@ model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrai
 (1) Our project is very easy to use, just need to run SDM.py. 
 
 First, please put `your dataset` into `./Images` folder, there is an example (image.jpg is also okay):
-
+```bash
 Images/
+├── your_dataset_name/
+│   ├── train/
+│   │   ├── 001.png
+│   │   ├── 002.png
+│   │   └── ...
+│   ├── val/
+│   │   ├── 012.png
+│   │   ├── 050.png
+│   │   └── ...
+```
 
-├── your dataset name/
-
-│ ├── train/
-
-│ │ │── 001.png
-
-│ │ │── 002.png
-
-│ │ │── ...
-
-│ ├── val/
-
-│ │ │── 012.png
-
-│ │ │── 050.png
-
-│ │ │── ...
-
-
-Second, put your desrctipt
+Second, put your desrctiptions and labels into a .txt file, you can put it in `./description` folder. Each line is in the format of `description text, label`.
 
 Third, please give parameters, you can run:
 
 ```bash
 cd SDM-D
 
-python SDM.py --image_segs_folder /path/to/images --out_folder /path/to/output --des_file /path/to/prompt.txt
+python SDM.py --image_folder /path/to/images --out_folder /path/to/output --des_file /path/to/prompt.txt
 
 ```
-Third, the structure of the `output` folder is as follows:
-
+In the last, the structure of the `output` folder is as follows:
+```bash
 output/
-
 │── mask/  # mask of the instance segmentation task
-
 │── labels/  # label of the instance segmentation task in YOLO format
-
-│── visual_new/  # visual of the instance segmentation task (SDM-D.py)
-
-│── visual_all/  # visual of all masks of an image
-
-│── json/  # json of the instance segmentation task
-
-(2) If you want to get colorful visual results, please run SDM-D.py. You can set the colors what you want in SDM-D.py line 53-70 and 84-103.
+│── mask_idx_visual/ # visual the mask ids 
+│── mask_color_visual/  # visual masks with color [need to set, see follows (2)]
+│── label_box_visual/  # visual detection boxed of masks [need to set, see follows (3)]
+│── json/  # json of the instance segmentation task [need to set, see follows (4)]
+```
+(2) If you want to get colorful visual results, you need to set the `mask_color_visual` as `Ture`. The visual results will be saved in `out_folder/mask_color_visual` folder.
 
 ```bash
-python SDM_mask_color.py
+python SDM.py --image_folder /path/to/images --out_folder /path/to/output --des_file /path/to/prompt.txt --mask_color_visual True
+```
+![SDM-D architecture](./asset/mask_visual.png)
+
+(3) If you want to visual the detection boxes, you need to set `'--box_visual'` as `True` or run:
+```bash
+python SDM.py --image_folder /path/to/images --out_folder /path/to/output --des_file /path/to/prompt.txt --box_visual True
+```
+(4) If you want to see the detail of masks, you can save their `.josn` file by set the `'--save_json'` as `True`:
+
+```bash
+python SDM.py --image_folder /path/to/images --out_folder /path/to/output --des_file /path/to/prompt.txt --save_json True
 ```
 
-(3) If you want to explore parameters that fit your own dataset, you can run `../notebook/SDM.ipynb`.
+(5) If you want to explore parameters that fit your own dataset, you can try `../notebook/SDM.ipynb`.
 
 
-### Label transfer
+### Label conversion
 
 (1) If you want to get object detection lables, just run:
 
@@ -143,7 +144,7 @@ python ../seg2label/seg2semantic.py
 python ../seg2label/abstract.py
 ```
     
-## The design of description texts
+### The design of description texts
 
 The design of prompts greatly affects the model performance, particularly in tasks involving fine-grained distinctions. We summarize an effective prompt template: `a/an {color} {shape} {object} with {feature}`, where the color description is the most crucial. Here is some examples of the prompt design:
 
@@ -151,14 +152,17 @@ The design of prompts greatly affects the model performance, particularly in tas
 
 Although some error can be avoided by adding a new description (e.g., Fig.(c)"black background"), considering the generality of the entire dataset, We don't recommend it. Regarding the design of the number of prompt texts, we recommend that users consider the characteristics of objects within the entire scene. While an excessive number of prompts may lead to higher accuracy, it can adversely affect the model's generalization ability, rendering it less suitable for large-scale datasets and requiring a lot of time and effort.
 
-## Distillation
+## 🌻SDM-D
 
-These pseudo-labels generated by SDM can serve as supervision for small, edge-deployable models (students), bypassing the need for costly manual annotation. The SDM-D is highly versatile and model-agnostic, with no restrictions on the choice of the student model. Any compact model optimized for a downstream task can be seamlessly integrated into the distillation process. And the is no distillation loss in SDM-D, all the distilled models have better accuracy.
+### Distillation
 
-## Model Description
+These pseudo-labels generated by SDM can serve as supervision for small, edge-deployable models (students), bypassing the need for costly manual annotation. The SDM-D is highly versatile and model-agnostic, with no restrictions on the choice of the student model. Any compact model optimized for a downstream task can be seamlessly integrated into the distillation process. And the is no distillation loss in SDM-D, all the distilled models have better accuracy. And the distilled can achive better performence with few-shot learning.
+![few-shot](./asset/few-shot.png)
+
+### Model Description
 
 
-### Comparison of Inference Time and GPU Memory Allocation for Each Method
+#### Comparison of Inference Time and GPU Memory Allocation for Each Method
 
 |     | **Grounded SAM** | **YOLO-World** | **SDM** | **SDM-D (YOLOv8s)** |
 |-------------------------|------------------|----------------|---------|---------------------|
@@ -166,7 +170,7 @@ These pseudo-labels generated by SDM can serve as supervision for small, edge-de
 | **GPU Memory Allocation (MiB)** | 7,602         | 2,268         | 6,650         | **878**         |
 |                                                                  |
 
-## Dataset
+## 📖Dataset
 
 We introduce a high-quality, comprehensive fruit instance segmentation dataset named [[`MegaFruits`](https://github.com/00mmw/MegaFruits.git)]. This dataset encompasses 20,242 images of strawberries with 569,382 pseudo masks, 2,400 manually labeled images of yellow peaches with 10,169 masks, and 2,540 manually labeled images of blueberries with 20,656 masks. Leveraging the capabilities of our method, we are able to generate such a large scale of pseudo-segmentation labels. We anticipate this resource will catalyze further research and practical advancements in agricultural vision systems.
 
