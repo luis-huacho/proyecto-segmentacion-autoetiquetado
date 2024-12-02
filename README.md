@@ -1,4 +1,4 @@
-# Learn from Foundation Model: Fruits Detection Model without Manual Annotation
+# Learn from Foundation Model: Fruit Detection Model without Manual Annotation
 ## Segmentation-Description-Matching-Distilling
 
 **College of Biosystems Engineering and Food Science, Zhejiang University; 
@@ -7,8 +7,7 @@ ZJU-Hangzhou Global Scientific and Technological Innovation Center**
 Yanan Wang, [Zhenghao Fei](https://github.com/ZhenghaoFei), Ruichen Li, Yibin Ying
 
 [[`Paper`](
-https://doi.org/10.48550/arXiv.2411.16196)] [[`Project`](https://github.com/AgRoboticsResearch/SDM-D.git)]  [[`Dataset`](https://github.com/00mmw/MegaFruits.git)] 
-[![Colab](https://img.shields.io/static/v1?label=Demo&message=Colab&color=orange)](https://colab.research.google.com/drive/1Mwf_u9TezN0gSjdstvsUVi4e0knsiwo2?usp=drive_link)
+https://doi.org/10.48550/arXiv.2411.16196)] [[`Project`](https://github.com/AgRoboticsResearch/SDM-D.git)]  [[`Dataset`](https://github.com/00mmw/MegaFruits.git)] [![Colab](https://img.shields.io/static/v1?label=Demo&message=Colab&color=orange)](https://colab.research.google.com/drive/1Mwf_u9TezN0gSjdstvsUVi4e0knsiwo2?usp=drive_link)
 
 ![SDM-D architecture](./asset/1-all2.png)
 
