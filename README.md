@@ -7,7 +7,7 @@ ZJU-Hangzhou Global Scientific and Technological Innovation Center**
 Yanan Wang, [Zhenghao Fei](https://github.com/ZhenghaoFei), Ruichen Li, Yibin Ying
 
 [[`Paper`](
-https://doi.org/10.48550/arXiv.2411.16196)] [[`Project`](https://github.com/AgRoboticsResearch/SDM-D.git)]  [[`Dataset`](https://github.com/00mmw/MegaFruits.git)][[`Open in Colab`](https://colab.research.google.com/drive/1Mwf_u9TezN0gSjdstvsUVi4e0knsiwo2?pli=1&authuser=2#scrollTo=FeRGbW28961s)]
+https://doi.org/10.48550/arXiv.2411.16196)] [[`Project`](https://github.com/AgRoboticsResearch/SDM-D.git)]  [[`Dataset`](https://github.com/00mmw/MegaFruits.git)][[`Open in Colab`](https://colab.research.google.com/drive/1Mwf_u9TezN0gSjdstvsUVi4e0knsiwo2?usp=drive_link)]
 
 ![SDM-D architecture](./asset/1-all2.png)
 
