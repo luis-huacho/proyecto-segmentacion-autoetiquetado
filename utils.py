@@ -1,5 +1,6 @@
 import cv2
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 import torch
 from PIL import Image
@@ -523,8 +524,8 @@ def seg_describe_matching(image, segmentations, descriptions, clip_preprocessor,
     rgb_image = image.copy()
     img_width, img_height = image.shape[1], image.shape[0]
 
-    results = []
-    label_text = []
+    bbox_label = []
+    seg_label = []
     masks = []
 
     texts, labels, label_dict = prepare_descriptions(descriptions)
@@ -543,95 +544,60 @@ def seg_describe_matching(image, segmentations, descriptions, clip_preprocessor,
             obj_seg_input = torch.tensor(np.stack([obj_seg_preprocessed]))
             label = clip_prediction(clip_model, obj_seg_input, texts, labels)
             label_idx = label_dict[label]
-            results.append({"label": label, "xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
-            #label_text.append(f'{label_idx} ')
+            bbox_label.append({"label": label, "xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
+            #seg_label.append(f'{label_idx} ')
             line = f'{label_idx}'
             line_content = process_none_connected_areas(num_labels, labelled_mask, img_width, img_height)
             line += line_content
             line += '\n'
-            label_text.append(line)
+            seg_label.append(line)
             
-
             if mask_color:
                 masks.append({
                 'segmentation': mask_img,
                 'area': np.sum(mask),
                 'label': label
             })
-
         except Exception as e:
             print(f"Error processing {idx} mask, skipping. Error was {e}")
             continue
-       
-    return masks, results, label_text
+    return masks, bbox_label, seg_label
 
-def make_mask_color_visualization_image(image, anns, results):
-    # 创建一个 RGBA 图像用于掩码着色
-    img_with_masks = image.copy()  # 复制原始图像，用于显示掩码
+def get_distinct_colors(num_colors):
+    # Generate a colormap
+    cmap = matplotlib.colormaps['rainbow']
+    # Extract colors from the colormap
+    num_colors = len(num_colors)
+    colors = cmap(np.linspace(0, 1, num_colors))
+    # Convert colors to RGB
+    rgb_colors = colors[:, :3]
+    # Convert color to 0-255
+    rgb_colors_255 = (rgb_colors * 255).astype(np.uint8)
+    return rgb_colors_255, rgb_colors
+
+def make_mask_color_visualization_image(image, anns, results, label_dict, alpha=0.4):
+    img_with_masks = image.copy()  
     overlay = np.zeros_like(img_with_masks, dtype=np.uint8)
 
-    # 为每个掩码区域着色，并保持颜色与标签一致
+    # Draw the mask with distinct colors
+    rgb_colors_255, rgb_colors = get_distinct_colors(label_dict)
     for i, ann in enumerate(anns):
         mask = ann['segmentation']
-        
-        # 获取标签并设置颜色
-        label = ann['label']
-        if label == 'others':
-            color =  (252, 248, 187) # 注意这里是0-255范围的值，因为下面要赋给overlay
-        elif label == 'ripe':  
-            color = (229,76,94)  # 粉色  (229/255, 76/255, 94/255)   #lemon (254,251,177)
-        elif label == 'unripe':
-            color = (146, 208, 80)  # 浅绿色
-        elif label == 'leaf':
-            color = (0, 176, 80)  # 绿色
-        elif label == 'stem':
-            color = (243, 163, 97)  # 橙色
-        elif label == 'flower':
-            color = (168, 218, 219)  # 浅黄色
+        color = rgb_colors_255[label_dict[ann['label']]]
+        overlay[mask > 0] = color 
 
-        # 将目标区域设置为指定颜色
-        overlay[mask > 0] = color  # 将掩码区域的颜色设置为对应的标签颜色
-
-    # 将掩码叠加到原始图像上
-    alpha = 0.4  # 掩码透明度
     img_with_masks = cv2.addWeighted(overlay, alpha, img_with_masks, 1 - alpha, 0)
 
-    # 在图像上绘制边界框和标签
+    # Draw the object rectangle and label text
     font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 1.1
-    thickness = 2
-    font_color = (1, 1, 1)  # 白色
-
     for res in results:
-        # 设置每个标签的颜色
-        if res['label'] == 'others':
-            continue
-            box_color =   (252/255, 248/255, 187/255)
-            label_bg_color = (252/255, 248/255, 187/255)
-        elif res['label'] == 'ripe':
-            box_color =(229/255, 76/255, 94/255)
-            #(229/255, 76/255, 94/255)  # 粉色
-            label_bg_color = (229/255, 76/255, 94/255)
-        elif res['label'] == 'unripe':
-            box_color = (146/255, 208/255, 80/255)  # 浅绿色
-            label_bg_color = (146/255, 208/255, 80/255)
-        elif res['label'] == 'leaf':
-            box_color = (0/255, 176/255, 80/255)  # 绿色
-            label_bg_color = (0/255, 176/255, 80/255)
-        elif res['label'] == 'stem':
-            box_color = (243/255, 163/255, 97/255)  # 橙色
-            label_bg_color = (243/255, 163/255, 97/255)
-        elif res['label'] == 'flower':
-            box_color = (168/255, 218/255, 219/255)  # 浅黄色
-            label_bg_color = (168/255, 218/255, 219/255)
-
-        # Draw the rectangle
-        box_color_255 = (box_color[0]*255, box_color[1]*255, box_color[2]*255)
+        box_color = rgb_colors_255[label_dict[res['label']]]
+        box_color = tuple([int(x) for x in box_color])
+        # Draw the object rectangle
         cv2.rectangle(img_with_masks, (int(res['xmin']), int(res['ymin'])), 
                         (int(res['xmax']), int(res['ymax'])), 
-                        box_color_255, 2)  # Green color, 2px thickness
-        
+                        box_color, 2)  # Green color, 2px thickness
+        # Draw label text
         cv2.putText(img_with_masks, res['label'], (int(res['xmin']), int(res['ymin'] - 5)), 
                         font, 1, (255, 255, 255), 2, cv2.LINE_AA)  # White color, 2px thickness
-
     return img_with_masks
