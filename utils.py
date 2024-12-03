@@ -268,7 +268,7 @@ def get_masked_image(rgb_image, mask_img_path):
     return masked_image
 
 def clip_prediction(model, image_input, texts, labels):
-    text_tokens = tokenizer.tokenize(["This is " + desc for desc in texts])
+    text_tokens = tokenizer.tokenize(["This is " + desc for desc in texts]) # TODO: why add this is 
 
     with torch.no_grad():
         image_features = model.encode_image(image_input).float()
@@ -499,53 +499,55 @@ def draw_segments(sorted_anns, image, borders=True):
         image_vis = np.clip(image_vis, 0, 1)
     return image_vis
 
+def process_none_connected_areas(num_labels, labelled_mask, img_width, img_height, skip_points=300):
+    """
+    Process non-connected areas in the mask.
+    Keep all the non-connected areas in the mask.
+    """
+    line = ''
+    for region_label in range(1, num_labels + 1):
+        mask_cur = ((labelled_mask == region_label) * 255).astype(np.uint8)
+        contours, _ = cv2.findContours(mask_cur, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        contour = max(contours, key=cv2.contourArea)
+        contour = contour.reshape(-1, 2)
+        num_points = len(contour)
+        skip = num_points // skip_points
+        skip = max(1, skip)
+        approx_sparse = contour[::skip]
+        bottom_point_index = np.argmax(approx_sparse[:, 1])
+        sorted_points = np.concatenate([approx_sparse[bottom_point_index:], approx_sparse[:bottom_point_index]])
+        line += ' ' + ' '.join(f'{format(point[0]/img_width, ".6f")} {format(point[1]/img_height, ".6f")}' for point in sorted_points)
+    return line
 
 def seg_describe_matching(image, segmentations, descriptions, clip_preprocessor, clip_model, mask_color=True):
-    img_width, img_height = image.size
+    rgb_image = image.copy()
+    img_width, img_height = image.shape[1], image.shape[0]
+
     results = []
-    
     label_text = []
     masks = []
 
+    texts, labels, label_dict = prepare_descriptions(descriptions)
 
-    
-    for i, ann in enumerate(segmentations):
-        mask_path = os.path.join(mask_out_folder, file)
-        mask = cv2.imread(mask_path, 0)
-
-        
+    for idx, ann in enumerate(segmentations):
+        mask = ann['segmentation']
+        mask_img = (mask * 255).astype(np.uint8)
         labelled_mask, num_labels = label_region(mask)
         region_sizes = np.bincount(labelled_mask.flat)
         region_sizes[0] = 0
-
-        mask_img = cv2.imread(mask_path)[:, :, 0]
-        masked_image = mask_image(rgb_image, mask_img)
         
+        masked_image = mask_image(rgb_image, mask_img)
         try:
-            masked_image = get_masked_image(rgb_image, mask_path)
-            image, xmin, ymin, xmax, ymax = crop_object_from_white_background(masked_image)
-            
-            image_preprocessed = clip_preprocessor(image)
-            image_input = torch.tensor(np.stack([image_preprocessed]))
-            label = clip_prediction(clip_model, image_input, texts, labels)
-            label_num = label_dict[label]
+            obj_seg_image, xmin, ymin, xmax, ymax = crop_object_from_white_background(masked_image)
+            obj_seg_preprocessed = clip_preprocessor(obj_seg_image)
+            obj_seg_input = torch.tensor(np.stack([obj_seg_preprocessed]))
+            label = clip_prediction(clip_model, obj_seg_input, texts, labels)
+            label_idx = label_dict[label]
             results.append({"label": label, "xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
-            #label_text.append(f'{label_num} ')
-            line = f'{label_num}'
-
-            for region_label in range(1, num_labels+1):
-                mask_cur = ((labelled_mask == region_label) * 255).astype(np.uint8)
-                contours, _ = cv2.findContours(mask_cur, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-                c = max(contours, key=cv2.contourArea)
-                c = c.reshape(-1, 2)
-                num_points = len(c)
-                skip = num_points // 300
-                skip = max(1, skip)
-                approx_sparse = c[::skip]
-                bottom_point_index = np.argmax(approx_sparse[:, 1])
-                sorted_points = np.concatenate([approx_sparse[bottom_point_index:], approx_sparse[:bottom_point_index]])
-                line += ' ' + ' '.join(f'{format(point[0]/img_width, ".6f")} {format(point[1]/img_height, ".6f")}' for point in sorted_points)
-                
+            #label_text.append(f'{label_idx} ')
+            line = f'{label_idx}'
+            line_content = process_none_connected_areas(num_labels, labelled_mask, img_width, img_height)
+            line += line_content
             line += '\n'
             label_text.append(line)
             
@@ -553,13 +555,83 @@ def seg_describe_matching(image, segmentations, descriptions, clip_preprocessor,
             if mask_color:
                 masks.append({
                 'segmentation': mask_img,
-                'area': np.sum(mask_img),
+                'area': np.sum(mask),
                 'label': label
             })
 
         except Exception as e:
-            print(f"Error processing file {mask_path}, skipping. Error was {e}")
+            print(f"Error processing {idx} mask, skipping. Error was {e}")
             continue
+       
+    return masks, results, label_text
 
+def make_mask_color_visualization_image(image, anns, results):
+    # 创建一个 RGBA 图像用于掩码着色
+    img_with_masks = image.copy()  # 复制原始图像，用于显示掩码
+    overlay = np.zeros_like(img_with_masks, dtype=np.uint8)
+
+    # 为每个掩码区域着色，并保持颜色与标签一致
+    for i, ann in enumerate(anns):
+        mask = ann['segmentation']
         
-    return masks, results, rgb_image
+        # 获取标签并设置颜色
+        label = ann['label']
+        if label == 'others':
+            color =  (252, 248, 187) # 注意这里是0-255范围的值，因为下面要赋给overlay
+        elif label == 'ripe':  
+            color = (229,76,94)  # 粉色  (229/255, 76/255, 94/255)   #lemon (254,251,177)
+        elif label == 'unripe':
+            color = (146, 208, 80)  # 浅绿色
+        elif label == 'leaf':
+            color = (0, 176, 80)  # 绿色
+        elif label == 'stem':
+            color = (243, 163, 97)  # 橙色
+        elif label == 'flower':
+            color = (168, 218, 219)  # 浅黄色
+
+        # 将目标区域设置为指定颜色
+        overlay[mask > 0] = color  # 将掩码区域的颜色设置为对应的标签颜色
+
+    # 将掩码叠加到原始图像上
+    alpha = 0.4  # 掩码透明度
+    img_with_masks = cv2.addWeighted(overlay, alpha, img_with_masks, 1 - alpha, 0)
+
+    # 在图像上绘制边界框和标签
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 1.1
+    thickness = 2
+    font_color = (1, 1, 1)  # 白色
+
+    for res in results:
+        # 设置每个标签的颜色
+        if res['label'] == 'others':
+            continue
+            box_color =   (252/255, 248/255, 187/255)
+            label_bg_color = (252/255, 248/255, 187/255)
+        elif res['label'] == 'ripe':
+            box_color =(229/255, 76/255, 94/255)
+            #(229/255, 76/255, 94/255)  # 粉色
+            label_bg_color = (229/255, 76/255, 94/255)
+        elif res['label'] == 'unripe':
+            box_color = (146/255, 208/255, 80/255)  # 浅绿色
+            label_bg_color = (146/255, 208/255, 80/255)
+        elif res['label'] == 'leaf':
+            box_color = (0/255, 176/255, 80/255)  # 绿色
+            label_bg_color = (0/255, 176/255, 80/255)
+        elif res['label'] == 'stem':
+            box_color = (243/255, 163/255, 97/255)  # 橙色
+            label_bg_color = (243/255, 163/255, 97/255)
+        elif res['label'] == 'flower':
+            box_color = (168/255, 218/255, 219/255)  # 浅黄色
+            label_bg_color = (168/255, 218/255, 219/255)
+
+        # Draw the rectangle
+        box_color_255 = (box_color[0]*255, box_color[1]*255, box_color[2]*255)
+        cv2.rectangle(img_with_masks, (int(res['xmin']), int(res['ymin'])), 
+                        (int(res['xmax']), int(res['ymax'])), 
+                        box_color_255, 2)  # Green color, 2px thickness
+        
+        cv2.putText(img_with_masks, res['label'], (int(res['xmin']), int(res['ymin'] - 5)), 
+                        font, 1, (255, 255, 255), 2, cv2.LINE_AA)  # White color, 2px thickness
+
+    return img_with_masks
