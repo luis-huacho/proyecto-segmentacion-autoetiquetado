@@ -417,8 +417,6 @@ def image_label_get(img_path, mask_out_folder, clip_preprocessor, model, texts, 
             print(f"Error processing file {mask_path}, skipping. Error was {e}")
             continue
 
-        
-        
         with open(label_out_path, 'w') as f:
             f.writelines(file_contents)
     return masks, results, rgb_image
@@ -447,3 +445,80 @@ def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_o
                 mask_color_visualization(rgb_image, masks, results, mask_color_save_path)
 
             print(label_out_path,' lables generated!')
+            
+def prepare_descriptions(descriptions):
+    label_dict = {}
+    texts = []
+    labels = []
+    current_label = 0
+    for desc in descriptions:
+        texts.append(desc[0])
+        labels.append(desc[1])
+        label_dict[desc[1]] = current_label
+        current_label += 1
+    return texts, labels, label_dict
+
+
+def seg_describe_matching(image, segmentations, descriptions, clip_preprocessor, clip_model, mask_color=True):
+    img_width, img_height = image.size
+    results = []
+    
+    label_text = []
+    masks = []
+
+
+    
+    for i, ann in enumerate(segmentations):
+        mask_path = os.path.join(mask_out_folder, file)
+        mask = cv2.imread(mask_path, 0)
+
+        
+        labelled_mask, num_labels = label_region(mask)
+        region_sizes = np.bincount(labelled_mask.flat)
+        region_sizes[0] = 0
+
+        mask_img = cv2.imread(mask_path)[:, :, 0]
+        masked_image = mask_image(rgb_image, mask_img)
+        
+        try:
+            masked_image = get_masked_image(rgb_image, mask_path)
+            image, xmin, ymin, xmax, ymax = crop_object_from_white_background(masked_image)
+            
+            image_preprocessed = clip_preprocessor(image)
+            image_input = torch.tensor(np.stack([image_preprocessed]))
+            label = clip_prediction(clip_model, image_input, texts, labels)
+            label_num = label_dict[label]
+            results.append({"label": label, "xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
+            #label_text.append(f'{label_num} ')
+            line = f'{label_num}'
+
+            for region_label in range(1, num_labels+1):
+                mask_cur = ((labelled_mask == region_label) * 255).astype(np.uint8)
+                contours, _ = cv2.findContours(mask_cur, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+                c = max(contours, key=cv2.contourArea)
+                c = c.reshape(-1, 2)
+                num_points = len(c)
+                skip = num_points // 300
+                skip = max(1, skip)
+                approx_sparse = c[::skip]
+                bottom_point_index = np.argmax(approx_sparse[:, 1])
+                sorted_points = np.concatenate([approx_sparse[bottom_point_index:], approx_sparse[:bottom_point_index]])
+                line += ' ' + ' '.join(f'{format(point[0]/img_width, ".6f")} {format(point[1]/img_height, ".6f")}' for point in sorted_points)
+                
+            line += '\n'
+            label_text.append(line)
+            
+
+            if mask_color:
+                masks.append({
+                'segmentation': mask_img,
+                'area': np.sum(mask_img),
+                'label': label
+            })
+
+        except Exception as e:
+            print(f"Error processing file {mask_path}, skipping. Error was {e}")
+            continue
+
+        
+    return masks, results, rgb_image
