@@ -458,6 +458,47 @@ def prepare_descriptions(descriptions):
         current_label += 1
     return texts, labels, label_dict
 
+def make_output_folders(output_folder, img_path, verbose=False):
+    # make output folder
+    image_name = Path(img_path).stem
+    mask_out_folder = os.path.join(output_folder, "mask", image_name)
+    mask_idx_out_folder = os.path.join(output_folder, "idx")
+    mask_color_visual_subdir = os.path.join(output_folder, "visual_label")
+    label_out_path = os.path.join(output_folder, "label", f"{image_name}.txt")
+    if verbose:
+        print("mask_out_folder: ", mask_out_folder)
+        print("mask_idx_out_folder: ", mask_idx_out_folder)
+        print("mask_color_visual_subdir: ", mask_color_visual_subdir)
+        print("label_out_path: ", label_out_path)
+    os.makedirs(os.path.dirname(label_out_path), exist_ok=True)
+    os.makedirs(mask_out_folder, exist_ok=True)
+    os.makedirs(mask_idx_out_folder, exist_ok=True)
+    os.makedirs(mask_color_visual_subdir, exist_ok=True)
+    return mask_out_folder, mask_idx_out_folder, mask_color_visual_subdir, label_out_path
+
+def draw_segments(sorted_anns, image, borders=True):
+    if len(sorted_anns) == 0:
+        return
+    image_vis = image.copy()/255.0
+    for i, ann in enumerate(sorted_anns):
+        m = ann['segmentation']
+        color_mask = np.concatenate([np.random.random(3), [0.5]])  # Generate a random color
+        # Apply color mask to the image where the mask is True
+        image_vis[m] = image_vis[m] * (1 - color_mask[3]) + color_mask[:3] * color_mask[3]
+        if borders:
+            contours, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            cv2.drawContours(image_vis, contours, -1, (0, 0, 255), thickness=1)  # Draw blue borders
+            
+        # Calculate the center of the mask using moments
+        moments = cv2.moments(m.astype(np.uint8))
+        if moments["m00"] != 0:  # Avoid division by zero
+            x = int(moments["m10"] / moments["m00"])
+            y = int(moments["m01"] / moments["m00"])
+            cv2.putText(image_vis, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)  # Add text
+        # limit to 0-1
+        image_vis = np.clip(image_vis, 0, 1)
+    return image_vis
+
 
 def seg_describe_matching(image, segmentations, descriptions, clip_preprocessor, clip_model, mask_color=True):
     img_width, img_height = image.size
