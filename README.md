@@ -7,7 +7,7 @@ ZJU-Hangzhou Global Scientific and Technological Innovation Center**
 Yanan Wang, [Zhenghao Fei](https://github.com/ZhenghaoFei), Ruichen Li, Yibin Ying
 
 
-[![Paper](https://img.shields.io/static/v1?label=Paper&message=arXiv&color=red)](https://doi.org/10.48550/arXiv.2411.16196) [![Project](https://img.shields.io/static/v1?label=Project&message=Github&color=blue)](https://github.com/AgRoboticsResearch/SDM-D.git) [![Dataset](https://img.shields.io/static/v1?label=Dataset&message=Kaggle&color=green)](https://github.com/00mmw/MegaFruits.git)
+[![Paper](https://img.shields.io/static/v1?label=Paper&message=arXiv&color=red)](https://doi.org/10.48550/arXiv.2411.16196) [![Project](https://img.shields.io/static/v1?label=Project&message=Github&color=blue)](https://github.com/AgRoboticsResearch/SDM-D.git) [![Dataset](https://img.shields.io/static/v1?label=Dataset&message=Kaggle&color=green)](https://www.kaggle.com/datasets/yanan0/megafruits)
 [![Colab](https://img.shields.io/static/v1?label=Demo&message=Colab&color=orange)](https://colab.research.google.com/drive/1Mwf_u9TezN0gSjdstvsUVi4e0knsiwo2?usp=drive_link)
 
 ![SDM-D architecture](./asset/1-all2.png)
