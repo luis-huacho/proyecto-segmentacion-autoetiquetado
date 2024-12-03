@@ -1,5 +1,6 @@
 import cv2
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 import torch
 from PIL import Image
@@ -268,7 +269,7 @@ def get_masked_image(rgb_image, mask_img_path):
     return masked_image
 
 def clip_prediction(model, image_input, texts, labels):
-    text_tokens = tokenizer.tokenize(["This is " + desc for desc in texts])
+    text_tokens = tokenizer.tokenize(["This is " + desc for desc in texts]) # TODO: why add this is 
 
     with torch.no_grad():
         image_features = model.encode_image(image_input).float()
@@ -417,8 +418,6 @@ def image_label_get(img_path, mask_out_folder, clip_preprocessor, model, texts, 
             print(f"Error processing file {mask_path}, skipping. Error was {e}")
             continue
 
-        
-        
         with open(label_out_path, 'w') as f:
             f.writelines(file_contents)
     return masks, results, rgb_image
@@ -447,3 +446,158 @@ def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_o
                 mask_color_visualization(rgb_image, masks, results, mask_color_save_path)
 
             print(label_out_path,' lables generated!')
+            
+def prepare_descriptions(descriptions):
+    label_dict = {}
+    texts = []
+    labels = []
+    current_label = 0
+    for desc in descriptions:
+        texts.append(desc[0])
+        labels.append(desc[1])
+        label_dict[desc[1]] = current_label
+        current_label += 1
+    return texts, labels, label_dict
+
+def make_output_folders(output_folder, img_path, verbose=False):
+    # make output folder
+    image_name = Path(img_path).stem
+    mask_out_folder = os.path.join(output_folder, "mask", image_name)
+    mask_idx_out_folder = os.path.join(output_folder, "idx")
+    mask_color_visual_subdir = os.path.join(output_folder, "visual_label")
+    label_out_path = os.path.join(output_folder, "label", f"{image_name}.txt")
+    if verbose:
+        print("mask_out_folder: ", mask_out_folder)
+        print("mask_idx_out_folder: ", mask_idx_out_folder)
+        print("mask_color_visual_subdir: ", mask_color_visual_subdir)
+        print("label_out_path: ", label_out_path)
+    os.makedirs(os.path.dirname(label_out_path), exist_ok=True)
+    os.makedirs(mask_out_folder, exist_ok=True)
+    os.makedirs(mask_idx_out_folder, exist_ok=True)
+    os.makedirs(mask_color_visual_subdir, exist_ok=True)
+    return mask_out_folder, mask_idx_out_folder, mask_color_visual_subdir, label_out_path
+
+def draw_segments(sorted_anns, image, borders=True):
+    if len(sorted_anns) == 0:
+        return
+    image_vis = image.copy()/255.0
+    for i, ann in enumerate(sorted_anns):
+        m = ann['segmentation']
+        color_mask = np.concatenate([np.random.random(3), [0.5]])  # Generate a random color
+        # Apply color mask to the image where the mask is True
+        image_vis[m] = image_vis[m] * (1 - color_mask[3]) + color_mask[:3] * color_mask[3]
+        if borders:
+            contours, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            cv2.drawContours(image_vis, contours, -1, (0, 0, 255), thickness=1)  # Draw blue borders
+            
+        # Calculate the center of the mask using moments
+        moments = cv2.moments(m.astype(np.uint8))
+        if moments["m00"] != 0:  # Avoid division by zero
+            x = int(moments["m10"] / moments["m00"])
+            y = int(moments["m01"] / moments["m00"])
+            cv2.putText(image_vis, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)  # Add text
+        # limit to 0-1
+        image_vis = np.clip(image_vis, 0, 1)
+    return image_vis
+
+def process_none_connected_areas(num_labels, labelled_mask, img_width, img_height, skip_points=300):
+    """
+    Process non-connected areas in the mask.
+    Keep all the non-connected areas in the mask.
+    """
+    line = ''
+    for region_label in range(1, num_labels + 1):
+        mask_cur = ((labelled_mask == region_label) * 255).astype(np.uint8)
+        contours, _ = cv2.findContours(mask_cur, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        contour = max(contours, key=cv2.contourArea)
+        contour = contour.reshape(-1, 2)
+        num_points = len(contour)
+        skip = num_points // skip_points
+        skip = max(1, skip)
+        approx_sparse = contour[::skip]
+        bottom_point_index = np.argmax(approx_sparse[:, 1])
+        sorted_points = np.concatenate([approx_sparse[bottom_point_index:], approx_sparse[:bottom_point_index]])
+        line += ' ' + ' '.join(f'{format(point[0]/img_width, ".6f")} {format(point[1]/img_height, ".6f")}' for point in sorted_points)
+    return line
+
+def seg_describe_matching(image, segmentations, descriptions, clip_preprocessor, clip_model, mask_color=True):
+    rgb_image = image.copy()
+    img_width, img_height = image.shape[1], image.shape[0]
+
+    bbox_label = []
+    seg_label = []
+    masks = []
+
+    texts, labels, label_dict = prepare_descriptions(descriptions)
+
+    for idx, ann in enumerate(segmentations):
+        mask = ann['segmentation']
+        mask_img = (mask * 255).astype(np.uint8)
+        labelled_mask, num_labels = label_region(mask)
+        region_sizes = np.bincount(labelled_mask.flat)
+        region_sizes[0] = 0
+        
+        masked_image = mask_image(rgb_image, mask_img)
+        try:
+            obj_seg_image, xmin, ymin, xmax, ymax = crop_object_from_white_background(masked_image)
+            obj_seg_preprocessed = clip_preprocessor(obj_seg_image)
+            obj_seg_input = torch.tensor(np.stack([obj_seg_preprocessed]))
+            label = clip_prediction(clip_model, obj_seg_input, texts, labels)
+            label_idx = label_dict[label]
+            bbox_label.append({"label": label, "xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
+            #seg_label.append(f'{label_idx} ')
+            line = f'{label_idx}'
+            line_content = process_none_connected_areas(num_labels, labelled_mask, img_width, img_height)
+            line += line_content
+            line += '\n'
+            seg_label.append(line)
+            
+            if mask_color:
+                masks.append({
+                'segmentation': mask_img,
+                'area': np.sum(mask),
+                'label': label
+            })
+        except Exception as e:
+            print(f"Error processing {idx} mask, skipping. Error was {e}")
+            continue
+    return masks, bbox_label, seg_label
+
+def get_distinct_colors(num_colors):
+    # Generate a colormap
+    cmap = matplotlib.colormaps['rainbow']
+    # Extract colors from the colormap
+    num_colors = len(num_colors)
+    colors = cmap(np.linspace(0, 1, num_colors))
+    # Convert colors to RGB
+    rgb_colors = colors[:, :3]
+    # Convert color to 0-255
+    rgb_colors_255 = (rgb_colors * 255).astype(np.uint8)
+    return rgb_colors_255, rgb_colors
+
+def make_mask_color_visualization_image(image, anns, results, label_dict, alpha=0.4):
+    img_with_masks = image.copy()  
+    overlay = np.zeros_like(img_with_masks, dtype=np.uint8)
+
+    # Draw the mask with distinct colors
+    rgb_colors_255, rgb_colors = get_distinct_colors(label_dict)
+    for i, ann in enumerate(anns):
+        mask = ann['segmentation']
+        color = rgb_colors_255[label_dict[ann['label']]]
+        overlay[mask > 0] = color 
+
+    img_with_masks = cv2.addWeighted(overlay, alpha, img_with_masks, 1 - alpha, 0)
+
+    # Draw the object rectangle and label text
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    for res in results:
+        box_color = rgb_colors_255[label_dict[res['label']]]
+        box_color = tuple([int(x) for x in box_color])
+        # Draw the object rectangle
+        cv2.rectangle(img_with_masks, (int(res['xmin']), int(res['ymin'])), 
+                        (int(res['xmax']), int(res['ymax'])), 
+                        box_color, 2)  # Green color, 2px thickness
+        # Draw label text
+        cv2.putText(img_with_masks, res['label'], (int(res['xmin']), int(res['ymin'] - 5)), 
+                        font, 1, (255, 255, 255), 2, cv2.LINE_AA)  # White color, 2px thickness
+    return img_with_masks
