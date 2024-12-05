@@ -448,10 +448,16 @@ def label_assignment(clip_preprocessor, image_folder, masks_segs_folder, label_o
             print(label_out_path,' lables generated!')
             
 def prepare_descriptions(descriptions):
+    """
+    Prepare the descriptions for the CLIP model.
+    Add a dummy label if only one description is provided.
+    """
     label_dict = {}
     texts = []
     labels = []
     current_label = 0
+    if len(descriptions) == 1:
+        descriptions.append(["others", "others"])
     for desc in descriptions:
         texts.append(desc[0])
         labels.append(desc[1])
@@ -575,13 +581,15 @@ def get_distinct_colors(num_colors):
     rgb_colors_255 = (rgb_colors * 255).astype(np.uint8)
     return rgb_colors_255, rgb_colors
 
-def make_mask_color_visualization_image(image, anns, results, label_dict, alpha=0.4):
+def make_mask_color_visualization_image(image, anns, results, label_dict, alpha=0.4, visualize_others=False):
     img_with_masks = image.copy()  
     overlay = np.zeros_like(img_with_masks, dtype=np.uint8)
 
     # Draw the mask with distinct colors
     rgb_colors_255, rgb_colors = get_distinct_colors(label_dict)
     for i, ann in enumerate(anns):
+        if ann['label'] == 'others' and not visualize_others:
+            continue
         mask = ann['segmentation']
         color = rgb_colors_255[label_dict[ann['label']]]
         overlay[mask > 0] = color 
@@ -591,6 +599,8 @@ def make_mask_color_visualization_image(image, anns, results, label_dict, alpha=
     # Draw the object rectangle and label text
     font = cv2.FONT_HERSHEY_SIMPLEX
     for res in results:
+        if res['label'] == 'others' and not visualize_others:
+            continue
         box_color = rgb_colors_255[label_dict[res['label']]]
         box_color = tuple([int(x) for x in box_color])
         # Draw the object rectangle
