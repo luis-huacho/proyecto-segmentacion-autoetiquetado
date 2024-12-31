@@ -1,13 +1,10 @@
 # Learn from Foundation Model: Fruit Detection Model without Manual Annotation
 ## Segmentation-Description-Matching-Distilling
 
-**College of Biosystems Engineering and Food Science, Zhejiang University; 
-ZJU-Hangzhou Global Scientific and Technological Innovation Center**
-
-Yanan Wang, [Zhenghao Fei](https://github.com/ZhenghaoFei), Ruichen Li, Yibin Ying
 
 
-[![Paper](https://img.shields.io/static/v1?label=Paper&message=arXiv&color=red)](https://doi.org/10.48550/arXiv.2411.16196) [![Project](https://img.shields.io/static/v1?label=Project&message=Github&color=blue)](https://github.com/AgRoboticsResearch/SDM-D.git) [![Dataset](https://img.shields.io/static/v1?label=Dataset&message=Kaggle&color=green)](https://www.kaggle.com/datasets/mmwang0/megafruits)
+
+[![Project](https://img.shields.io/static/v1?label=Project&message=Github&color=blue)](https://github.com/AgRoboticsResearch/SDM-D.git) [![Dataset](https://img.shields.io/static/v1?label=Dataset&message=Kaggle&color=green)](https://www.kaggle.com/datasets/mmwang0/megafruits)
 [![Colab](https://img.shields.io/static/v1?label=Demo&message=Colab&color=orange)](https://colab.research.google.com/drive/1tmgaogh9VjGp4sJnBMcUSyKrMfcuqwDw?usp=drive_link)
 
 ![SDM-D architecture](./asset/1-all2.png)
@@ -184,4 +181,4 @@ We introduce a high-quality, comprehensive fruit instance segmentation dataset n
 
 Our project wouldn't be possible without the contributions of these amazing people! Thank you all for making this project better.
 
-![Contribution](./asset/people1.png)
+![Contribution](./asset/people3.png)
