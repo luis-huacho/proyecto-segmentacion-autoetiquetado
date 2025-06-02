@@ -1,0 +1,49 @@
+1. Verificar Python 3.12
+
+python --version
+# Debe mostrar Python 3.12.x
+
+2. Actualizar pip
+
+python -m pip install --upgrade pip
+
+3. Instalar dependencias base
+
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# Para CPU solamente:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+pip install ftfy regex tqdm scipy opencv-python numpy Pillow matplotlib jupyter
+
+4. Instalar OpenCLIP
+
+pip install open_clip_torch
+
+5. Clonar e instalar SAM2
+
+git clone https://github.com/facebookresearch/sam2.git
+cd sam2
+pip install -e .
+cd ..
+
+6. Clonar e instalar SAM2
+
+cd checkpoints
+
+chmod +x download_ckpts.sh
+./download_ckpts.sh
+cd ..
+
+7. Ejecutar
+# Ejemplo básico
+python SDM.py --image_folder ./Images/strawberry --out_folder ./output/strawberry --des_file ./description/straw_des.txt
+
+# Con visualizaciones
+python SDM.py \
+    --image_folder ./Images/strawberry \
+    --out_folder ./output/strawberry \
+    --des_file ./description/straw_des.txt \
+    --mask_color_visual True \
+    --box_visual True \
+    --save_json True
+
