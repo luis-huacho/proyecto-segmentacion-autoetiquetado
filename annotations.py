@@ -381,6 +381,9 @@ class CLIPAnnotator:
             yolo_labels = []
             annotated_masks = []
 
+            # Mapeo explícito de etiquetas a IDs
+            label_to_id = {label: i for i, label in enumerate(label_dict.keys())}
+
             # Procesar cada máscara
             for mask_file in mask_files:
                 mask_path = os.path.join(mask_dir, mask_file)
@@ -391,7 +394,7 @@ class CLIPAnnotator:
 
                 # Clasificar máscara
                 predicted_label = self.classify_mask(image_rgb, mask, texts, labels)
-                class_id = label_dict.get(predicted_label, 0)
+                class_id = label_to_id.get(predicted_label, 0)
 
                 # Generar bbox de la máscara
                 coords = np.where(mask > 0)

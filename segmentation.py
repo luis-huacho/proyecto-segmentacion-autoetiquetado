@@ -10,6 +10,8 @@ import numpy as np
 from pathlib import Path
 import sys
 import time
+import torch.multiprocessing as mp
+from itertools import repeat
 
 # Importar SAM2
 sys.path.insert(0, os.path.join(os.getcwd(), 'sam2'))
@@ -46,30 +48,27 @@ class SAM2Segmentator:
         # Logger
         self.logger = logger
 
-        # Inicializar modelo
-        self._init_model()
-
         # Inicializar procesador de máscaras (sin pasar logger)
         self.mask_processor = MaskProcessor()
 
-    def _init_model(self):
-        """Inicializa el modelo SAM2"""
+    def _init_model(self, device_id=0):
+        """Inicializa el modelo SAM2 en una GPU específica."""
         try:
             # Configurar GPU si está disponible
             if torch.cuda.is_available():
-                torch.cuda.set_device(0)
-                device = 'cuda'
+                torch.cuda.set_device(device_id)
+                device = f'cuda:{device_id}'
 
                 # Optimizaciones para GPU moderna
                 torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
-                if torch.cuda.get_device_properties(0).major >= 8:
+                if torch.cuda.get_device_properties(device_id).major >= 8:
                     torch.backends.cuda.matmul.allow_tf32 = True
                     torch.backends.cudnn.allow_tf32 = True
             else:
                 device = 'cpu'
 
             # Construir modelo SAM2
-            self.sam2 = build_sam2(
+            sam2 = build_sam2(
                 self.model_cfg,
                 self.checkpoint_path,
                 device=device,
@@ -77,8 +76,8 @@ class SAM2Segmentator:
             )
 
             # Crear generador de máscaras automático
-            self.mask_generator = SAM2AutomaticMaskGenerator(
-                self.sam2,
+            mask_generator = SAM2AutomaticMaskGenerator(
+                sam2,
                 points_per_side=self.points_per_side,
                 pred_iou_thresh=0.7,
                 stability_score_thresh=0.92,
@@ -91,6 +90,8 @@ class SAM2Segmentator:
                 self.logger.main_logger.info(f"✅ Modelo SAM2 inicializado en {device}")
             else:
                 print(f"✅ Modelo SAM2 inicializado en {device}")
+            
+            return sam2, mask_generator
 
         except Exception as e:
             error_msg = f"Error inicializando modelo SAM2: {e}"
@@ -100,12 +101,13 @@ class SAM2Segmentator:
                 print(f"❌ {error_msg}")
             raise
 
-    def segment_image(self, image_path):
+    def segment_image(self, image_path, mask_generator):
         """
         Segmenta una imagen individual
 
         Args:
             image_path (str): Ruta de la imagen
+            mask_generator: El generador de mascaras de SAM2
 
         Returns:
             list: Lista de máscaras con metadatos
@@ -116,7 +118,7 @@ class SAM2Segmentator:
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
             # Generar máscaras
-            masks = self.mask_generator.generate(image_rgb)
+            masks = mask_generator.generate(image_rgb)
 
             if self.logger:
                 self.logger.main_logger.info(f"🎭 Generadas {len(masks)} máscaras para {Path(image_path).name}")
@@ -131,7 +133,6 @@ class SAM2Segmentator:
                 self.logger.log_error(
                     error_msg,
                     "segmentation",
-                    processing_time,
                     error=e
                 )
             else:
@@ -152,7 +153,15 @@ class SAM2Segmentator:
             save_annotations (bool): Guardar visualizaciones
             save_json (bool): Guardar metadatos JSON
         """
+        num_gpus = torch.cuda.device_count()
+        if num_gpus > 1:
+            print(f"Found {num_gpus} GPUs. Running in parallel mode.")
+            self._segment_dataset_parallel(image_folder, output_folder, enable_mask_nms, mask_nms_thresh, save_annotations, save_json, num_gpus)
+        else:
+            print("Found 1 or 0 GPUs. Running in sequential mode.")
+            self._segment_dataset_sequential(image_folder, output_folder, enable_mask_nms, mask_nms_thresh, save_annotations, save_json)
 
+    def _segment_dataset_sequential(self, image_folder, output_folder, enable_mask_nms, mask_nms_thresh, save_annotations, save_json):
         # Crear estructura de carpetas
         file_manager = FileManager(output_folder)
         file_manager.create_output_structure()
@@ -166,6 +175,7 @@ class SAM2Segmentator:
             self.logger.main_logger.info(f"📁 Carpetas a procesar: {list(dataset_structure['subfolders'].keys())}")
 
         processed_images = 0
+        sam2, mask_generator = self._init_model()
 
         # Procesar cada subcarpeta (train, val, test)
         for subfolder_name, subfolder_info in dataset_structure['subfolders'].items():
@@ -173,81 +183,9 @@ class SAM2Segmentator:
                 self.logger.main_logger.info(f"📂 Procesando subcarpeta: {subfolder_name}")
 
             for image_file in subfolder_info['image_files']:
-                try:
-                    image_path = os.path.join(subfolder_info['path'], image_file)
-                    image_name = Path(image_file).stem
-
-                    start_time = time.time()
-
-                    # Segmentar imagen
-                    masks = self.segment_image(image_path)
-
-                    if not masks:
-                        if self.logger:
-                            self.logger.log_warning(f"No se generaron máscaras para {image_file}", "segmentation")
-                        continue
-
-                    original_mask_count = len(masks)
-
-                    # Aplicar Mask NMS si está habilitado
-                    if enable_mask_nms:
-                        masks = self.mask_processor.apply_mask_nms(masks, mask_nms_thresh)
-
-                        if self.logger:
-                            reduction_pct = ((original_mask_count - len(
-                                masks)) / original_mask_count) * 100 if original_mask_count > 0 else 0
-                            self.logger.seg_logger.info(
-                                f"🎯 NMS aplicado a {image_file}: {original_mask_count} → {len(masks)} máscaras (-{reduction_pct:.1f}%)")
-
-                    # Guardar máscaras
-                    mask_output_dir = os.path.join(output_folder, 'mask', subfolder_name, image_name)
-                    os.makedirs(mask_output_dir, exist_ok=True)
-
-                    self._save_masks(masks, mask_output_dir)
-
-                    # Guardar visualización con índices
-                    if save_annotations:
-                        visual_output_path = os.path.join(output_folder, 'mask_idx_visual', subfolder_name, image_file)
-                        os.makedirs(os.path.dirname(visual_output_path), exist_ok=True)
-                        self._save_mask_visualization(masks, image_path, visual_output_path)
-
-                    # Guardar metadatos JSON
-                    if save_json:
-                        json_output_dir = os.path.join(output_folder, 'json', subfolder_name, image_name)
-                        os.makedirs(json_output_dir, exist_ok=True)
-                        self._save_mask_metadata(masks, json_output_dir)
-
-                    processing_time = time.time() - start_time
-                    processed_images += 1
-
-                    # Log del procesamiento exitoso
-                    if self.logger:
-                        self.logger.log_image_processing(
-                            image_file,
-                            "segmentation",
-                            processing_time,
-                            masks_generated=len(masks)
-                        )
-
-                        # Actualizar métricas de segmentación
-                        self.logger.log_segmentation_metrics(
-                            image_file,
-                            original_mask_count,
-                            len(masks),
-                            enable_mask_nms,
-                            processing_time
-                        )
-
-                    # Limpiar memoria
-                    del masks
-                    torch.cuda.empty_cache() if torch.cuda.is_available() else None
-
-                except Exception as e:
-                    if self.logger:
-                        self.logger.log_error(f"Error procesando {image_file}: {e}", "segmentation", context=image_file)
-                    else:
-                        print(f"❌ Error procesando {image_file}: {e}")
-                    continue
+                image_path = os.path.join(subfolder_info['path'], image_file)
+                self._process_single_image(image_path, subfolder_name, output_folder, enable_mask_nms, mask_nms_thresh, save_annotations, save_json, mask_generator)
+                processed_images += 1
 
         # Finalizar fase
         if self.logger:
@@ -260,6 +198,103 @@ class SAM2Segmentator:
                 self.logger.main_logger.warning(f"   • Imágenes fallidas: {failed_count}")
         else:
             print(f"✅ Segmentación completada: {processed_images}/{total_images} imágenes")
+
+    def _segment_dataset_parallel(self, image_folder, output_folder, enable_mask_nms, mask_nms_thresh, save_annotations, save_json, num_gpus):
+        file_manager = FileManager(output_folder)
+        file_manager.create_output_structure()
+        dataset_structure = file_manager.organize_dataset_structure(image_folder)
+        all_tasks = []
+        for subfolder_name, subfolder_info in dataset_structure['subfolders'].items():
+            for image_file in subfolder_info['image_files']:
+                image_path = os.path.join(subfolder_info['path'], image_file)
+                all_tasks.append((image_path, subfolder_name, output_folder, enable_mask_nms, mask_nms_thresh, save_annotations, save_json))
+
+        # Assign tasks to GPUs
+        tasks_by_gpu = [[] for _ in range(num_gpus)]
+        for i, task in enumerate(all_tasks):
+            tasks_by_gpu[i % num_gpus].append(task)
+
+        ctx = mp.get_context('spawn')
+        with ctx.Pool(processes=num_gpus) as pool:
+            pool.starmap(self._process_batch, zip(range(num_gpus), tasks_by_gpu))
+
+    def _process_batch(self, device_id, tasks):
+        sam2, mask_generator = self._init_model(device_id)
+        for task in tasks:
+            self._process_single_image(*task, mask_generator)
+
+    def _process_single_image(self, image_path, subfolder_name, output_folder, enable_mask_nms, mask_nms_thresh, save_annotations, save_json, mask_generator):
+        try:
+            image_name = Path(image_path).stem
+            start_time = time.time()
+
+            # Segmentar imagen
+            masks = self.segment_image(image_path, mask_generator)
+
+            if not masks:
+                if self.logger:
+                    self.logger.log_warning(f"No se generaron máscaras para {image_name}", "segmentation")
+                return
+
+            original_mask_count = len(masks)
+
+            # Aplicar Mask NMS si está habilitado
+            if enable_mask_nms:
+                masks = self.mask_processor.apply_mask_nms(masks, mask_nms_thresh)
+
+                if self.logger:
+                    reduction_pct = ((original_mask_count - len(
+                        masks)) / original_mask_count) * 100 if original_mask_count > 0 else 0
+                    self.logger.seg_logger.info(
+                        f"🎯 NMS aplicado a {image_name}: {original_mask_count} → {len(masks)} máscaras (-{reduction_pct:.1f}%)")
+
+            # Guardar máscaras
+            mask_output_dir = os.path.join(output_folder, 'mask', subfolder_name, image_name)
+            os.makedirs(mask_output_dir, exist_ok=True)
+
+            self._save_masks(masks, mask_output_dir)
+
+            # Guardar visualización con índices
+            if save_annotations:
+                visual_output_path = os.path.join(output_folder, 'mask_idx_visual', subfolder_name, f"{image_name}.png")
+                os.makedirs(os.path.dirname(visual_output_path), exist_ok=True)
+                self._save_mask_visualization(masks, image_path, visual_output_path)
+
+            # Guardar metadatos JSON
+            if save_json:
+                json_output_dir = os.path.join(output_folder, 'json', subfolder_name, image_name)
+                os.makedirs(json_output_dir, exist_ok=True)
+                self._save_mask_metadata(masks, json_output_dir)
+
+            processing_time = time.time() - start_time
+
+            # Log del procesamiento exitoso
+            if self.logger:
+                self.logger.log_image_processing(
+                    image_name,
+                    "segmentation",
+                    processing_time,
+                    masks_generated=len(masks)
+                )
+
+                # Actualizar métricas de segmentación
+                self.logger.log_segmentation_metrics(
+                    image_name,
+                    original_mask_count,
+                    len(masks),
+                    enable_mask_nms,
+                    processing_time
+                )
+
+            # Limpiar memoria
+            del masks
+            torch.cuda.empty_cache() if torch.cuda.is_available() else None
+
+        except Exception as e:
+            if self.logger:
+                self.logger.log_error(f"Error procesando {image_name}: {e}", "segmentation", context=image_name)
+            else:
+                print(f"❌ Error procesando {image_name}: {e}")
 
     def _save_masks(self, masks, output_dir):
         """Guarda las máscaras como imágenes PNG"""

@@ -23,11 +23,11 @@ logger = logging.getLogger(__name__)
 
 # Mapeo de índices de maduración a etiquetas descriptivas
 RIPENING_INDEX_MAPPING = {
-    1: ("underripe", "a light green underripe avocado with firm texture"),
-    2: ("breaking", "a green avocado starting to ripen, breaking stage"),
-    3: ("ripe_first", "a dark green ripe avocado in first stage, ready for harvest"),
-    4: ("ripe_second", "a dark green to black ripe avocado in second stage, optimal harvest"),
-    5: ("overripe", "a very dark overripe avocado past optimal harvest time")
+    1: ("Underripe", "an underripe avocado"),
+    2: ("Underripe", "an underripe avocado"),
+    3: ("Ripe", "a ripe avocado"),
+    4: ("Ripe", "a ripe avocado"),
+    5: ("Overripe", "an overripe avocado")
 }
 
 
@@ -234,8 +234,11 @@ class AvocadoDatasetProcessor:
             f.write("# Generado automáticamente desde dataset clasificado\n\n")
 
             f.write("# Estados de madurez de avocados (basado en Ripening Index)\n")
+            unique_labels = set()
             for index, (label, description) in RIPENING_INDEX_MAPPING.items():
-                f.write(f"{description}, {label}\n")
+                if label not in unique_labels:
+                    f.write(f"{description}, {label}\n")
+                    unique_labels.add(label)
 
             f.write("\n# Elementos adicionales del árbol de avocado\n")
             f.write("a green avocado tree leaf, leaf\n")
@@ -299,16 +302,16 @@ class AvocadoDatasetProcessor:
 echo "🥑 Iniciando procesamiento del dataset de avocados..."
 
 # Procesamiento completo con analytics de avocados
-python main_sdm_modular.py \\
-    --image_folder {self.output_path}/Images/avocado \\
-    --output_folder {self.output_path}/output/avocado \\
-    --description_file {self.output_path}/description/avocado_des.txt \\
-    --enable_visualizations \\
-    --box_visual \\
-    --color_visual \\
-    --avocado_analytics \\
-    --enable_progress_monitor \\
-    --save_json \\
+python main_sdm_modular.py \
+    --image_folder {self.output_path}/Images/avocado \
+    --output_folder {self.output_path}/output/avocado \
+    --description_file {self.output_path}/description/avocado_des.txt \
+    --enable_visualizations \
+    --box_visual \
+    --color_visual \
+    --avocado_analytics \
+    --enable_progress_monitor \
+    --save_json \
     --verbose
 
 echo "✅ Procesamiento completado!"
@@ -376,16 +379,16 @@ def main():
 Ejemplos de uso:
 
     # Procesamiento básico
-    python process_avocado_dataset.py \\
-        --dataset_path ./avocado_dataset \\
+    python process_avocado_dataset.py \
+        --dataset_path ./avocado_dataset \
         --output_path ./prepared_avocado_dataset
 
     # Con splits personalizados
-    python process_avocado_dataset.py \\
-        --dataset_path ./avocado_dataset \\
-        --output_path ./prepared_avocado_dataset \\
-        --train_ratio 0.8 \\
-        --val_ratio 0.1 \\
+    python process_avocado_dataset.py \
+        --dataset_path ./avocado_dataset \
+        --output_path ./prepared_avocado_dataset \
+        --train_ratio 0.8 \
+        --val_ratio 0.1 \
         --test_ratio 0.1
         '''
     )
