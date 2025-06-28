@@ -5,7 +5,10 @@ Utilidades para manejo de archivos y estructura de directorios
 import os
 import json
 import shutil
+import cv2
 from pathlib import Path
+from datetime import datetime
+from PIL import Image
 
 
 class FileManager:
@@ -23,9 +26,11 @@ class FileManager:
     def create_output_structure(self):
         """Crea la estructura completa de directorios para SDM"""
         folders = [
-            'mask',
+            'masks',
             'json',
             'labels',
+            'visualizations',
+            'metadata',
             'mask_idx_visual',
             'label_box_visual',
             'mask_color_visual'
@@ -36,6 +41,42 @@ class FileManager:
             os.makedirs(folder_path, exist_ok=True)
 
         print(f"✅ Estructura de directorios creada en: {self.base_output_folder}")
+
+    def get_output_structure_for_dataset(self):
+        """
+        Retorna la estructura de directorios para procesamiento de dataset
+
+        Returns:
+            dict: Diccionario con las rutas de salida organizadas
+        """
+        structure = {
+            'masks': {
+                'path': os.path.join(self.base_output_folder, 'masks'),
+                'description': 'Máscaras de segmentación como imágenes PNG'
+            },
+            'visualizations': {
+                'path': os.path.join(self.base_output_folder, 'visualizations'),
+                'description': 'Visualizaciones de máscaras con índices'
+            },
+            'metadata': {
+                'path': os.path.join(self.base_output_folder, 'metadata'),
+                'description': 'Metadatos JSON de las máscaras'
+            },
+            'labels': {
+                'path': os.path.join(self.base_output_folder, 'labels'),
+                'description': 'Etiquetas YOLO generadas'
+            },
+            'json': {
+                'path': os.path.join(self.base_output_folder, 'json'),
+                'description': 'Archivos JSON con información detallada'
+            }
+        }
+
+        # Crear directorios si no existen
+        for folder_info in structure.values():
+            os.makedirs(folder_info['path'], exist_ok=True)
+
+        return structure
 
     def create_annotation_structure(self):
         """Crea estructura específica para anotaciones"""
@@ -281,44 +322,33 @@ class FileManager:
 
     def _validate_image_file(self, image_path):
         """
-        Valida que un archivo de imagen sea válido
+        Valida si un archivo de imagen es válido
 
         Args:
             image_path (str): Ruta de la imagen
 
         Returns:
-            bool: True si es válida
+            bool: True si la imagen es válida
         """
         try:
-            import cv2
-            image = cv2.imread(image_path)
-            return image is not None
+            # Intentar cargar con OpenCV
+            img = cv2.imread(image_path)
+            if img is None:
+                return False
+
+            # Verificar que tenga dimensiones válidas
+            if img.shape[0] == 0 or img.shape[1] == 0:
+                return False
+
+            return True
         except Exception:
-            return False
-
-    def clean_empty_directories(self, base_folder):
-        """
-        Limpia directorios vacíos
-
-        Args:
-            base_folder (str): Directorio base
-        """
-        removed_dirs = []
-
-        for root, dirs, files in os.walk(base_folder, topdown=False):
-            for dir_name in dirs:
-                dir_path = os.path.join(root, dir_name)
-                try:
-                    if not os.listdir(dir_path):  # Directorio vacío
-                        os.rmdir(dir_path)
-                        removed_dirs.append(dir_path)
-                except OSError:
-                    pass  # No se pudo eliminar
-
-        if removed_dirs:
-            print(f"🗑️ Eliminados {len(removed_dirs)} directorios vacíos")
-
-        return removed_dirs
+            try:
+                # Intentar con PIL como backup
+                with Image.open(image_path) as img:
+                    img.verify()
+                return True
+            except Exception:
+                return False
 
     def get_processing_stats(self, output_folder):
         """
@@ -328,23 +358,24 @@ class FileManager:
             output_folder (str): Carpeta de salida
 
         Returns:
-            dict: Estadísticas
+            dict: Estadísticas del procesamiento
         """
         stats = {
             'masks_generated': 0,
             'labels_generated': 0,
             'visualizations_generated': 0,
             'json_files': 0,
-            'subfolders_processed': 0
+            'total_files': 0
         }
 
+        if not os.path.exists(output_folder):
+            return stats
+
         # Contar máscaras
-        mask_folder = os.path.join(output_folder, 'mask')
-        if os.path.exists(mask_folder):
-            for root, dirs, files in os.walk(mask_folder):
+        masks_folder = os.path.join(output_folder, 'masks')
+        if os.path.exists(masks_folder):
+            for root, dirs, files in os.walk(masks_folder):
                 stats['masks_generated'] += len([f for f in files if f.endswith('.png')])
-                if dirs:
-                    stats['subfolders_processed'] = len(dirs)
 
         # Contar etiquetas
         labels_folder = os.path.join(output_folder, 'labels')
@@ -353,7 +384,7 @@ class FileManager:
                 stats['labels_generated'] += len([f for f in files if f.endswith('.txt')])
 
         # Contar visualizaciones
-        visual_folders = ['mask_idx_visual', 'label_box_visual', 'mask_color_visual']
+        visual_folders = ['visualizations', 'mask_idx_visual', 'label_box_visual', 'mask_color_visual']
         for visual_folder in visual_folders:
             folder_path = os.path.join(output_folder, visual_folder)
             if os.path.exists(folder_path):
@@ -361,10 +392,16 @@ class FileManager:
                     stats['visualizations_generated'] += len([f for f in files if f.endswith('.png')])
 
         # Contar archivos JSON
-        json_folder = os.path.join(output_folder, 'json')
-        if os.path.exists(json_folder):
-            for root, dirs, files in os.walk(json_folder):
-                stats['json_files'] += len([f for f in files if f.endswith('.json')])
+        json_folders = ['json', 'metadata']
+        for json_folder in json_folders:
+            folder_path = os.path.join(output_folder, json_folder)
+            if os.path.exists(folder_path):
+                for root, dirs, files in os.walk(folder_path):
+                    stats['json_files'] += len([f for f in files if f.endswith('.json')])
+
+        # Contar total de archivos
+        for root, dirs, files in os.walk(output_folder):
+            stats['total_files'] += len(files)
 
         return stats
 
@@ -393,7 +430,6 @@ class FileManager:
 
     def _get_timestamp(self):
         """Obtiene timestamp actual"""
-        from datetime import datetime
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     def _analyze_output_structure(self, output_folder):
@@ -417,3 +453,39 @@ class FileManager:
                     }
 
         return structure
+
+    def clean_empty_folders(self, root_folder):
+        """
+        Limpia carpetas vacías de manera recursiva
+
+        Args:
+            root_folder (str): Carpeta raíz para limpieza
+        """
+        for root, dirs, files in os.walk(root_folder, topdown=False):
+            for folder in dirs:
+                folder_path = os.path.join(root, folder)
+                try:
+                    # Intentar eliminar si está vacía
+                    os.rmdir(folder_path)
+                    print(f"🗑️ Carpeta vacía eliminada: {folder_path}")
+                except OSError:
+                    # La carpeta no está vacía, continuar
+                    pass
+
+    def create_index_file(self, output_folder):
+        """
+        Crea archivo índice con información del contenido
+
+        Args:
+            output_folder (str): Carpeta de salida
+        """
+        index_content = {
+            'created_at': self._get_timestamp(),
+            'folder_structure': self._analyze_output_structure(output_folder),
+            'statistics': self.get_processing_stats(output_folder),
+            'description': 'Índice automático generado por SDM-D Framework'
+        }
+
+        index_path = os.path.join(output_folder, 'index.json')
+        self.save_json_metadata(index_content, index_path)
+        print(f"📋 Archivo índice creado: {index_path}")

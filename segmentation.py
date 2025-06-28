@@ -22,7 +22,7 @@ except ImportError as e:
 
 # Importaciones locales
 from utiles.mask_utils import MaskProcessor
-from utiles.file_manager import FileManager
+from utiles.file_utils import FileManager
 from utiles.logging_utils import SDMLogger
 
 
