@@ -1,0 +1,16 @@
+# Descripciones para detección de avocados/paltas
+# Formato: descripción, etiqueta
+# Líneas que empiecen con # son comentarios
+
+# Estados de madurez de avocados
+a dark green mature avocado ready for harvest, ripe
+a light green unripe avocado still developing, unripe
+an overripe dark avocado past optimal harvest time, overripe
+
+# Elementos del árbol de avocado
+a green avocado tree leaf, leaf
+a brown avocado tree branch, branch
+a small yellowish avocado tree flower, flower
+
+# Fondo y otros elementos
+soil or background or other elements, background

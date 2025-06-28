@@ -2,3 +2,5 @@ __pycache__/
 checkpoints/*.pt
 tmp/
 sam2/
+.idea/
+avocado_dataset/images/
