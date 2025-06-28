@@ -140,7 +140,7 @@ class CLIPAnnotator:
         except Exception as e:
             error_msg = f"Error cargando descripciones: {e}"
             if self.logger:
-                self.logger.log_error(error_msg, "annotation", context=description_file)
+                self.logger.log_error(error_msg, "annotation")
             else:
                 print(f"❌ {error_msg}")
             raise
@@ -150,30 +150,25 @@ class CLIPAnnotator:
         Clasifica una máscara individual usando CLIP
 
         Args:
-            image (np.ndarray): Imagen original
+            image (np.ndarray): Imagen RGB
             mask (np.ndarray): Máscara binaria
-            texts (list): Lista de descripciones
-            labels (list): Lista de etiquetas
+            texts (list): Lista de descripciones de texto
+            labels (list): Lista de etiquetas correspondientes
 
         Returns:
             str: Etiqueta predicha
         """
         try:
-            # Aplicar máscara a la imagen
+            # Aplicar máscara y recortar objeto
             masked_image = self.clip_processor.apply_mask_to_image(image, mask)
+            cropped_object = self.clip_processor.crop_object_from_background(masked_image)
 
-            # Recortar región de interés
-            cropped_image = self.clip_processor.crop_object_from_background(masked_image)
+            if cropped_object is None:
+                return "unknown"
 
-            # Validar calidad de imagen
-            if not self.clip_processor.validate_image_quality(cropped_image):
-                if self.logger:
-                    self.logger.log_warning("Imagen de baja calidad para clasificación", "annotation")
-                return "others"
-
-            # Preprocesar para CLIP
-            image_preprocessed = self.clip_preprocessor(cropped_image)
-            image_input = torch.tensor(np.stack([image_preprocessed])).to(self.device)
+            # Preprocesar imagen para CLIP
+            preprocessed_image = self.clip_preprocessor(cropped_object)
+            image_input = torch.tensor(np.stack([preprocessed_image])).to(self.device)
 
             # Predecir con CLIP
             predicted_label = self.clip_processor.predict_with_clip(
@@ -184,276 +179,300 @@ class CLIPAnnotator:
 
         except Exception as e:
             if self.logger:
-                self.logger.log_warning(f"Error clasificando máscara: {e}", "annotation")
+                self.logger.log_error(f"Error clasificando máscara: {e}", "annotation")
             else:
-                print(f"⚠️ Error clasificando máscara: {e}")
-            return "others"  # Etiqueta por defecto
+                print(f"❌ Error clasificando máscara: {e}")
+            return "unknown"
 
-    def annotate_dataset(self, image_folder, mask_folder, description_file, output_folder,
-                         enable_visualizations=False, enable_box_visual=False, enable_color_visual=False,
-                         enable_avocado_analytics=True):
+    def set_avocado_analytics(self, avocado_analytics):
         """
-        Anota un dataset completo
+        Configura analytics específicos para avocados
 
         Args:
-            image_folder (str): Carpeta con imágenes originales
-            mask_folder (str): Carpeta con máscaras generadas
-            description_file (str): Archivo con descripciones
-            output_folder (str): Carpeta de salida
-            enable_visualizations (bool): Generar visualizaciones
-            enable_box_visual (bool): Visualizar cajas delimitadoras
-            enable_color_visual (bool): Visualizar máscaras coloreadas
-            enable_avocado_analytics (bool): Habilitar análisis específico de avocados
+            avocado_analytics (AvocadoAnalytics): Instancia de analytics
         """
+        self.avocado_analytics = avocado_analytics
 
-        # Cargar descripciones
-        texts, labels, label_dict = self.load_descriptions(description_file)
+    def annotate_dataset(self, image_folder, output_folder, description_file,
+                         mask_folder=None, enable_visualizations=True,
+                         enable_box_visual=False, enable_color_visual=False,
+                         enable_avocado_analytics=False, save_json=False,
+                         verbose=False):
+        """
+        Anota un dataset completo de imágenes y máscaras
 
-        # Detectar si es dataset de avocados
-        is_avocado_dataset = any(label in ['ripe', 'unripe', 'overripe'] for label in labels)
+        Args:
+            image_folder (str): Carpeta con imágenes
+            output_folder (str): Carpeta de salida
+            description_file (str): Archivo de descripciones
+            mask_folder (str): Carpeta con máscaras (opcional, se inferirá si no se proporciona)
+            enable_visualizations (bool): Generar visualizaciones
+            enable_box_visual (bool): Generar visualización de cajas
+            enable_color_visual (bool): Generar visualización coloreada
+            enable_avocado_analytics (bool): Generar analytics de avocados
+            save_json (bool): Guardar metadatos JSON
+            verbose (bool): Logging detallado
 
-        # Inicializar analytics de avocados si aplica
-        if enable_avocado_analytics and is_avocado_dataset:
-            self.avocado_analytics = AvocadoAnalytics(output_folder)
+        Returns:
+            bool: True si la anotación fue exitosa
+        """
+        try:
             if self.logger:
-                self.logger.main_logger.info("🥑 Analytics de avocados habilitado")
+                self.logger.main_logger.info("🏷️ Iniciando anotación del dataset...")
+            else:
+                print("🏷️ Iniciando anotación del dataset...")
 
-        # Crear estructura de carpetas
-        file_manager = FileManager(output_folder)
-        file_manager.create_annotation_structure()
+            # Cargar descripciones
+            texts, labels, label_dict = self.load_descriptions(description_file)
 
-        # Analizar dataset
-        dataset_structure = file_manager.organize_dataset_structure(image_folder)
-        total_images = dataset_structure['total_images']
+            # Crear estructura de salida
+            file_manager = FileManager(output_folder)
+            file_manager.create_annotation_structure()
 
-        if self.logger:
-            self.logger.start_phase("annotation", total_images)
-            self.logger.main_logger.info(f"📁 Carpetas a procesar: {list(dataset_structure['subfolders'].keys())}")
+            # Determinar carpeta de máscaras
+            if mask_folder is None:
+                # Inferir de la estructura del output de segmentación
+                mask_folder = os.path.join(os.path.dirname(output_folder), 'masks')
 
-        processed_images = 0
-        analysis_results = []  # Para analytics de avocados
+            if not os.path.exists(mask_folder):
+                error_msg = f"Carpeta de máscaras no encontrada: {mask_folder}"
+                if self.logger:
+                    self.logger.log_error(error_msg, "annotation")
+                else:
+                    print(f"❌ {error_msg}")
+                return False
 
-        # Procesar cada subcarpeta
-        for subfolder_name, subfolder_info in dataset_structure['subfolders'].items():
+            # Analizar estructura del dataset
+            dataset_structure = file_manager.organize_dataset_structure(image_folder)
+            total_images = dataset_structure['total_images']
+
             if self.logger:
-                self.logger.main_logger.info(f"📂 Procesando subcarpeta: {subfolder_name}")
+                self.logger.start_phase("annotation", total_images)
 
-            for image_file in subfolder_info['image_files']:
-                try:
-                    image_name = Path(image_file).stem
-                    image_path = os.path.join(subfolder_info['path'], image_file)
-                    mask_dir = os.path.join(mask_folder, subfolder_name, image_name)
+            processed_images = 0
 
-                    # Verificar que existan máscaras
-                    if not os.path.exists(mask_dir):
-                        warning_msg = f"No se encontraron máscaras para {image_file}"
-                        if self.logger:
-                            self.logger.log_warning(warning_msg, "annotation")
-                        else:
-                            print(f"⚠️ {warning_msg}")
-                        continue
+            # Procesar cada subcarpeta
+            for subfolder_name, subfolder_info in dataset_structure['subfolders'].items():
+                if self.logger:
+                    self.logger.main_logger.info(f"📂 Procesando subcarpeta: {subfolder_name}")
 
-                    start_time = time.time()
+                subfolder_path = subfolder_info['path']
 
-                    # Procesar imagen
-                    results = self._process_single_image(
-                        image_path, mask_dir, texts, labels, label_dict
-                    )
-
-                    if not results:
-                        warning_msg = f"No se procesaron máscaras para {image_file}"
-                        if self.logger:
-                            self.logger.log_warning(warning_msg, "annotation")
-                        continue
-
-                    processing_time = time.time() - start_time
-
-                    # Guardar etiquetas YOLO
-                    label_output_path = os.path.join(output_folder, 'labels', subfolder_name, f'{image_name}.txt')
-                    os.makedirs(os.path.dirname(label_output_path), exist_ok=True)
-                    self._save_yolo_labels(results['yolo_labels'], label_output_path)
-
-                    # Generar visualizaciones si está habilitado
-                    if enable_visualizations:
-                        self._generate_visualizations(
-                            image_path, results, subfolder_name, image_file, output_folder,
-                            enable_box_visual, enable_color_visual
-                        )
-
-                    # Análisis específico de avocados
-                    if self.avocado_analytics:
-                        analysis = self.avocado_analytics.analyze_avocado_detection(
-                            image_path, results['detections'], results.get('annotated_masks')
-                        )
-                        if analysis:
-                            analysis_results.append(analysis)
-
-                            # Agregar entrada al timeline
-                            self.avocado_analytics.add_processing_timeline_entry(
-                                time.time(),
-                                analysis['avocado_count'],
-                                image_file
-                            )
-
-                    processed_images += 1
-
-                    # Log del procesamiento exitoso
-                    if self.logger:
-                        # Contar detecciones por clase
-                        class_counts = {}
-                        for det in results['detections']:
-                            label = det['label']
-                            class_counts[label] = class_counts.get(label, 0) + 1
-
-                        self.logger.log_image_processing(
-                            image_file,
-                            "annotation",
-                            processing_time,
-                            detections_made=len(results['detections'])
-                        )
-
-                        self.logger.log_annotation_metrics(
-                            image_file,
-                            len(results.get('annotated_masks', [])),
-                            results['detections'],
-                            processing_time
-                        )
-
-                except Exception as e:
-                    if self.logger:
-                        self.logger.log_error(f"Error procesando {image_file}: {e}", "annotation", context=image_file)
-                    else:
-                        print(f"❌ Error procesando {image_file}: {e}")
+                # Verificar que la subcarpeta sea un directorio
+                if not os.path.isdir(subfolder_path):
                     continue
 
-        # Generar analytics de avocados si aplica
-        if self.avocado_analytics and analysis_results:
-            self._generate_avocado_analytics(analysis_results)
+                print(f"\n📂 Procesando subcarpeta: {subfolder_name}")
 
-        # Finalizar fase
-        if self.logger:
-            self.logger.end_phase("annotation")
-            self.logger.main_logger.info(f"📊 Resumen de anotación:")
-            self.logger.main_logger.info(f"   • Imágenes procesadas: {processed_images}/{total_images}")
+                # Obtener lista de imágenes
+                image_files = [f for f in os.listdir(subfolder_path)
+                               if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
 
-            if processed_images < total_images:
-                failed_count = total_images - processed_images
-                self.logger.main_logger.warning(f"   • Imágenes fallidas: {failed_count}")
-        else:
-            print(f"✅ Anotación completada: {processed_images}/{total_images} imágenes")
+                for image_file in image_files:
+                    try:
+                        image_name = Path(image_file).stem
+                        image_path = os.path.join(subfolder_path, image_file)
+
+                        # Determinar directorio de máscaras para esta imagen
+                        mask_dir = os.path.join(mask_folder, subfolder_name, image_name)
+
+                        print(f"  🖼️ Anotando: {image_file}")
+
+                        # Verificar que existan máscaras
+                        if not os.path.exists(mask_dir):
+                            print(f"    ⚠️ No se encontraron máscaras para {image_file}")
+                            continue
+
+                        # Procesar imagen
+                        results = self._process_single_image(
+                            image_path, mask_dir, texts, labels, label_dict
+                        )
+
+                        if not results:
+                            print(f"    ⚠️ No se procesaron máscaras para {image_file}")
+                            continue
+
+                        # Guardar etiquetas YOLO
+                        label_output_path = os.path.join(output_folder, 'labels', subfolder_name, f'{image_name}.txt')
+                        os.makedirs(os.path.dirname(label_output_path), exist_ok=True)
+                        self._save_yolo_labels(results['yolo_labels'], label_output_path)
+
+                        # Generar visualizaciones si está habilitado
+                        if enable_visualizations:
+                            self._generate_visualizations(
+                                image_path, results, subfolder_name, image_file, output_folder,
+                                enable_box_visual, enable_color_visual
+                            )
+
+                        # Guardar metadatos JSON si está habilitado
+                        if save_json:
+                            json_output_path = os.path.join(output_folder, 'json', subfolder_name, f'{image_name}.json')
+                            os.makedirs(os.path.dirname(json_output_path), exist_ok=True)
+                            file_manager.save_json_metadata(results, json_output_path)
+
+                        # Analytics de avocados si está habilitado
+                        if enable_avocado_analytics and self.avocado_analytics:
+                            self.avocado_analytics.process_image_results(image_file, results)
+
+                        processed_images += 1
+                        print(f"    ✅ Procesado: {len(results['detections'])} detecciones")
+
+                        if self.logger:
+                            self.logger.update_progress("annotation", processed_images)
+
+                    except Exception as e:
+                        print(f"    ❌ Error procesando {image_file}: {e}")
+                        if self.logger:
+                            self.logger.log_error(f"Error procesando {image_file}: {e}", "annotation")
+                        continue
+
+            # Finalizar fase
+            if self.logger:
+                self.logger.end_phase("annotation")
+                self.logger.main_logger.info(f"📊 Resumen de anotación:")
+                self.logger.main_logger.info(f"   • Imágenes procesadas: {processed_images}/{total_images}")
+
+            print(f"\n✅ Anotación completada!")
+            print(f"📊 Imágenes procesadas: {processed_images}/{total_images}")
+
+            # Generar analytics de avocados si está habilitado
+            if enable_avocado_analytics and self.avocado_analytics:
+                self._generate_avocado_analytics()
+
+            return True
+
+        except Exception as e:
+            error_msg = f"Error durante la anotación del dataset: {e}"
+            if self.logger:
+                self.logger.log_error(error_msg, "annotation")
+            else:
+                print(f"❌ {error_msg}")
+            return False
 
     def _process_single_image(self, image_path, mask_dir, texts, labels, label_dict):
-        """Procesa una imagen individual"""
+        """
+        Procesa una imagen individual y sus máscaras
+
+        Args:
+            image_path (str): Ruta de la imagen
+            mask_dir (str): Directorio con las máscaras
+            texts (list): Textos de descripción
+            labels (list): Etiquetas
+            label_dict (dict): Diccionario de mapeo de etiquetas
+
+        Returns:
+            dict: Resultados del procesamiento
+        """
         try:
             # Cargar imagen
             image = cv2.imread(image_path)
-            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            pil_image = Image.open(image_path).convert('RGB')
-            img_width, img_height = pil_image.size
+            if image is None:
+                return None
 
-            # Obtener lista de máscaras
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            height, width = image_rgb.shape[:2]
+
+            # Obtener archivos de máscaras
             mask_files = [f for f in os.listdir(mask_dir) if f.endswith('.png')]
-            mask_files.sort()  # Ordenar para consistencia
+            if not mask_files:
+                return None
 
             detections = []
             yolo_labels = []
             annotated_masks = []
 
+            # Procesar cada máscara
             for mask_file in mask_files:
                 mask_path = os.path.join(mask_dir, mask_file)
+                mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
 
-                # Cargar máscara
-                mask = cv2.imread(mask_path, 0)  # Cargar en escala de grises
+                if mask is None:
+                    continue
 
                 # Clasificar máscara
                 predicted_label = self.classify_mask(image_rgb, mask, texts, labels)
-                label_id = label_dict[predicted_label]
+                class_id = label_dict.get(predicted_label, 0)
 
-                # Generar detección y etiqueta YOLO
-                detection, yolo_label = self._process_mask_region(
-                    mask, predicted_label, label_id, img_width, img_height
-                )
+                # Generar bbox de la máscara
+                coords = np.where(mask > 0)
+                if len(coords[0]) == 0:
+                    continue
 
-                if detection and yolo_label:
-                    detections.append(detection)
-                    yolo_labels.append(yolo_label)
+                ymin, ymax = coords[0].min(), coords[0].max()
+                xmin, xmax = coords[1].min(), coords[1].max()
 
-                    # Agregar máscara anotada para visualización
-                    annotated_masks.append({
-                        'segmentation': mask,
-                        'area': np.sum(mask > 0),
-                        'label': predicted_label
-                    })
+                # Crear detección
+                detection = {
+                    'label': predicted_label,
+                    'class_id': class_id,
+                    'xmin': int(xmin), 'ymin': int(ymin),
+                    'xmax': int(xmax), 'ymax': int(ymax),
+                    'confidence': 1.0  # CLIP no proporciona score de confianza
+                }
+                detections.append(detection)
+
+                # Generar etiqueta YOLO bbox
+                x_center = (xmin + xmax) / 2 / width
+                y_center = (ymin + ymax) / 2 / height
+                bbox_width = (xmax - xmin) / width
+                bbox_height = (ymax - ymin) / height
+
+                yolo_label = f"{class_id} {x_center:.6f} {y_center:.6f} {bbox_width:.6f} {bbox_height:.6f}"
+                yolo_labels.append(yolo_label)
+
+                # Agregar máscara anotada
+                annotated_masks.append({
+                    'mask': mask,
+                    'label': predicted_label,
+                    'bbox': (xmin, ymin, xmax, ymax)
+                })
 
             return {
+                'image_rgb': image_rgb,
                 'detections': detections,
                 'yolo_labels': yolo_labels,
-                'annotated_masks': annotated_masks,
-                'image_rgb': image_rgb
+                'annotated_masks': annotated_masks
             }
 
         except Exception as e:
             if self.logger:
-                self.logger.log_error(f"Error procesando imagen {image_path}: {e}", "annotation", context=image_path)
+                self.logger.log_error(f"Error procesando imagen {image_path}: {e}", "annotation")
             else:
                 print(f"❌ Error procesando imagen {image_path}: {e}")
             return None
 
-    def _process_mask_region(self, mask, label, label_id, img_width, img_height):
-        """Procesa una región de máscara para generar detección y etiqueta YOLO"""
-        try:
-            # Detectar componentes conectados
-            labeled_mask, num_labels = label_region(mask)
-
-            if num_labels == 0:
-                return None, None
-
-            # Calcular bounding box de toda la máscara
-            coords = np.where(mask > 0)
-            if len(coords[0]) == 0:
-                return None, None
-
-            ymin, ymax = coords[0].min(), coords[0].max()
-            xmin, xmax = coords[1].min(), coords[1].max()
-
-            # Crear detección
-            detection = {
-                'label': label,
-                'xmin': int(xmin),
-                'ymin': int(ymin),
-                'xmax': int(xmax),
-                'ymax': int(ymax)
-            }
-
-            # Generar etiqueta YOLO (formato: class_id x1 y1 x2 y2 ... polygon)
-            yolo_label = self.label_generator.generate_yolo_polygon_label(
-                labeled_mask, label_id, img_width, img_height, num_labels
-            )
-
-            return detection, yolo_label
-
-        except Exception as e:
-            if self.logger:
-                self.logger.log_warning(f"Error procesando región de máscara: {e}", "annotation")
-            else:
-                print(f"⚠️ Error procesando región de máscara: {e}")
-            return None, None
-
     def _save_yolo_labels(self, yolo_labels, output_path):
-        """Guarda etiquetas en formato YOLO"""
+        """
+        Guarda etiquetas en formato YOLO
+
+        Args:
+            yolo_labels (list): Lista de etiquetas YOLO
+            output_path (str): Ruta de salida
+        """
         try:
             with open(output_path, 'w') as f:
                 for label in yolo_labels:
                     f.write(label + '\n')
         except Exception as e:
             if self.logger:
-                self.logger.log_warning(f"Error guardando etiquetas: {e}", "annotation")
+                self.logger.log_error(f"Error guardando etiquetas YOLO: {e}", "annotation")
             else:
-                print(f"⚠️ Error guardando etiquetas: {e}")
+                print(f"❌ Error guardando etiquetas YOLO: {e}")
 
-    def _generate_visualizations(self, image_path, results, subfolder, image_file,
-                                 output_folder, enable_box_visual, enable_color_visual):
-        """Genera visualizaciones opcionales"""
+    def _generate_visualizations(self, image_path, results, subfolder, image_file, output_folder,
+                                 enable_box_visual, enable_color_visual):
+        """
+        Genera visualizaciones de las detecciones
+
+        Args:
+            image_path (str): Ruta de la imagen
+            results (dict): Resultados del procesamiento
+            subfolder (str): Subcarpeta actual
+            image_file (str): Nombre del archivo de imagen
+            output_folder (str): Carpeta de salida
+            enable_box_visual (bool): Generar visualización de cajas
+            enable_color_visual (bool): Generar visualización coloreada
+        """
         try:
             if enable_box_visual:
                 # Visualización con cajas delimitadoras
@@ -476,16 +495,18 @@ class CLIPAnnotator:
                 )
 
         except Exception as e:
-            if self.logger:
-                self.logger.log_warning(f"Error generando visualizaciones: {e}", "annotation")
-            else:
-                print(f"⚠️ Error generando visualizaciones: {e}")
+            print(f"    ⚠️ Error generando visualizaciones: {e}")
 
-    def _generate_avocado_analytics(self, analysis_results):
+    def _generate_avocado_analytics(self):
         """Genera analytics específicos para avocados"""
+        if not self.avocado_analytics:
+            return
+
         try:
             if self.logger:
-                self.logger.main_logger.info("🥑 Generando analytics de avocados...")
+                self.logger.main_logger.info("📊 Generando analytics de avocados...")
+            else:
+                print("📊 Generando analytics de avocados...")
 
             # Crear gráficas de distribución de madurez
             chart_path = self.avocado_analytics.create_maturity_distribution_chart()
@@ -497,13 +518,8 @@ class CLIPAnnotator:
             if size_chart_path and self.logger:
                 self.logger.main_logger.info(f"📊 Análisis de tamaños: {size_chart_path}")
 
-            # Crear dashboard de calidad del cultivo
-            dashboard_path = self.avocado_analytics.create_crop_quality_dashboard(analysis_results)
-            if dashboard_path and self.logger:
-                self.logger.main_logger.info(f"📊 Dashboard de calidad: {dashboard_path}")
-
             # Exportar reporte completo
-            report_path = self.avocado_analytics.export_analytics_report(analysis_results)
+            report_path = self.avocado_analytics.export_analytics_report()
             if self.logger:
                 self.logger.main_logger.info(f"📄 Reporte de analytics: {report_path}")
 
@@ -538,8 +554,16 @@ def main():
     # Crear anotador
     annotator = CLIPAnnotator(logger=logger)
 
+    # Configurar analytics de avocados si está habilitado
+    if args.avocado_analytics:
+        try:
+            avocado_analytics = AvocadoAnalytics(args.output_folder)
+            annotator.set_avocado_analytics(avocado_analytics)
+        except ImportError:
+            print("⚠️ Analytics de avocados no disponibles")
+
     # Anotar dataset
-    annotator.annotate_dataset(
+    success = annotator.annotate_dataset(
         image_folder=args.image_folder,
         mask_folder=args.mask_folder,
         description_file=args.description_file,
@@ -554,222 +578,7 @@ def main():
     if logger:
         logger.save_session_report()
 
-
-if __name__ == "__main__":
-    main().path.isdir(subfolder_path):
-    continue
-
-print(f"\n📂 Procesando subcarpeta: {subfolder}")
-
-# Obtener lista de imágenes
-image_files = [f for f in os.listdir(subfolder_path)
-               if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-
-total_images += len(image_files)
-
-for image_file in image_files:
-    try:
-        image_name = Path(image_file).stem
-        image_path = os.path.join(subfolder_path, image_file)
-        mask_dir = os.path.join(mask_folder, subfolder, image_name)
-
-        print(f"  🖼️ Anotando: {image_file}")
-
-        # Verificar que existan máscaras
-        if not os.path.exists(mask_dir):
-            print(f"    ⚠️ No se encontraron máscaras para {image_file}")
-            continue
-
-        # Procesar imagen
-        results = self._process_single_image(
-            image_path, mask_dir, texts, labels, label_dict
-        )
-
-        if not results:
-            print(f"    ⚠️ No se procesaron máscaras para {image_file}")
-            continue
-
-        # Guardar etiquetas YOLO
-        label_output_path = os.path.join(output_folder, 'labels', subfolder, f'{image_name}.txt')
-        os.makedirs(os.path.dirname(label_output_path), exist_ok=True)
-        self._save_yolo_labels(results['yolo_labels'], label_output_path)
-
-        # Generar visualizaciones si está habilitado
-        if enable_visualizations:
-            self._generate_visualizations(
-                image_path, results, subfolder, image_file, output_folder,
-                enable_box_visual, enable_color_visual
-            )
-
-        processed_images += 1
-        print(f"    ✅ Procesado: {len(results['detections'])} detecciones")
-
-    except Exception as e:
-        print(f"    ❌ Error procesando {image_file}: {e}")
-        continue
-
-print(f"\n✅ Anotación completada!")
-print(f"📊 Procesadas: {processed_images}/{total_images} imágenes")
-
-
-def _process_single_image(self, image_path, mask_dir, texts, labels, label_dict):
-    """Procesa una imagen individual"""
-    try:
-        # Cargar imagen
-        image = cv2.imread(image_path)
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        pil_image = Image.open(image_path).convert('RGB')
-        img_width, img_height = pil_image.size
-
-        # Obtener lista de máscaras
-        mask_files = [f for f in os.listdir(mask_dir) if f.endswith('.png')]
-        mask_files.sort()  # Ordenar para consistencia
-
-        detections = []
-        yolo_labels = []
-        annotated_masks = []
-
-        for mask_file in mask_files:
-            mask_path = os.path.join(mask_dir, mask_file)
-
-            # Cargar máscara
-            mask = cv2.imread(mask_path, 0)  # Cargar en escala de grises
-
-            # Clasificar máscara
-            predicted_label = self.classify_mask(image_rgb, mask, texts, labels)
-            label_id = label_dict[predicted_label]
-
-            # Generar detección y etiqueta YOLO
-            detection, yolo_label = self._process_mask_region(
-                mask, predicted_label, label_id, img_width, img_height
-            )
-
-            if detection and yolo_label:
-                detections.append(detection)
-                yolo_labels.append(yolo_label)
-
-                # Agregar máscara anotada para visualización
-                annotated_masks.append({
-                    'segmentation': mask,
-                    'area': np.sum(mask > 0),
-                    'label': predicted_label
-                })
-
-        return {
-            'detections': detections,
-            'yolo_labels': yolo_labels,
-            'annotated_masks': annotated_masks,
-            'image_rgb': image_rgb
-        }
-
-    except Exception as e:
-        print(f"    ❌ Error procesando imagen {image_path}: {e}")
-        return None
-
-
-def _process_mask_region(self, mask, label, label_id, img_width, img_height):
-    """Procesa una región de máscara para generar detección y etiqueta YOLO"""
-    try:
-        # Detectar componentes conectados
-        labeled_mask, num_labels = label_region(mask)
-
-        if num_labels == 0:
-            return None, None
-
-        # Calcular bounding box de toda la máscara
-        coords = np.where(mask > 0)
-        if len(coords[0]) == 0:
-            return None, None
-
-        ymin, ymax = coords[0].min(), coords[0].max()
-        xmin, xmax = coords[1].min(), coords[1].max()
-
-        # Crear detección
-        detection = {
-            'label': label,
-            'xmin': int(xmin),
-            'ymin': int(ymin),
-            'xmax': int(xmax),
-            'ymax': int(ymax)
-        }
-
-        # Generar etiqueta YOLO (formato: class_id x1 y1 x2 y2 ... polygon)
-        yolo_label = self.label_generator.generate_yolo_polygon_label(
-            labeled_mask, label_id, img_width, img_height, num_labels
-        )
-
-        return detection, yolo_label
-
-    except Exception as e:
-        print(f"    ⚠️ Error procesando región de máscara: {e}")
-        return None, None
-
-
-def _save_yolo_labels(self, yolo_labels, output_path):
-    """Guarda etiquetas en formato YOLO"""
-    try:
-        with open(output_path, 'w') as f:
-            for label in yolo_labels:
-                f.write(label + '\n')
-    except Exception as e:
-        print(f"    ⚠️ Error guardando etiquetas: {e}")
-
-
-def _generate_visualizations(self, image_path, results, subfolder, image_file,
-                             output_folder, enable_box_visual, enable_color_visual):
-    """Genera visualizaciones opcionales"""
-    try:
-        if enable_box_visual:
-            # Visualización con cajas delimitadoras
-            box_visual_dir = os.path.join(output_folder, 'label_box_visual', subfolder)
-            os.makedirs(box_visual_dir, exist_ok=True)
-
-            self.visualization_manager.create_box_visualization(
-                image_path, results['detections'],
-                os.path.join(box_visual_dir, image_file)
-            )
-
-        if enable_color_visual:
-            # Visualización con máscaras coloreadas
-            color_visual_dir = os.path.join(output_folder, 'mask_color_visual', subfolder)
-            os.makedirs(color_visual_dir, exist_ok=True)
-
-            self.visualization_manager.create_color_mask_visualization(
-                results['image_rgb'], results['annotated_masks'], results['detections'],
-                os.path.join(color_visual_dir, image_file)
-            )
-
-    except Exception as e:
-        print(f"    ⚠️ Error generando visualizaciones: {e}")
-
-
-def main():
-    """Función principal para testing del módulo"""
-    import argparse
-
-    parser = argparse.ArgumentParser(description='Módulo de Anotación OpenCLIP')
-    parser.add_argument('--image_folder', type=str, required=True, help='Carpeta con imágenes')
-    parser.add_argument('--mask_folder', type=str, required=True, help='Carpeta con máscaras')
-    parser.add_argument('--description_file', type=str, required=True, help='Archivo de descripciones')
-    parser.add_argument('--output_folder', type=str, required=True, help='Carpeta de salida')
-    parser.add_argument('--box_visual', action='store_true', help='Generar visualización de cajas')
-    parser.add_argument('--color_visual', action='store_true', help='Generar visualización coloreada')
-
-    args = parser.parse_args()
-
-    # Crear anotador
-    annotator = CLIPAnnotator()
-
-    # Anotar dataset
-    annotator.annotate_dataset(
-        image_folder=args.image_folder,
-        mask_folder=args.mask_folder,
-        description_file=args.description_file,
-        output_folder=args.output_folder,
-        enable_visualizations=True,
-        enable_box_visual=args.box_visual,
-        enable_color_visual=args.color_visual
-    )
+    return success
 
 
 if __name__ == "__main__":
