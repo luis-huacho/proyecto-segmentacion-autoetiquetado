@@ -1,13 +1,15 @@
-# Descripciones para detección de avocados/paltas
+# Descripciones para detección de avocados con clasificación de maduración (5 etapas)
 # Formato: descripción, etiqueta
-# Líneas que empiecen con # son comentarios
+# Compatible con dataset de clasificación 1-5
 
-# Estados de madurez de avocados
-a dark green mature avocado ready for harvest, ripe
-a light green unripe avocado still developing, unripe
-an overripe dark avocado past optimal harvest time, overripe
+# Estados específicos de madurez de avocados (basado en Ripening Index Classification)
+a light green underripe avocado with firm texture, underripe
+a green avocado starting to ripen, breaking stage, breaking
+a dark green ripe avocado in first stage, ready for harvest, ripe_first
+a dark green to black ripe avocado in second stage, optimal harvest, ripe_second
+a very dark overripe avocado past optimal harvest time, overripe
 
-# Elementos del árbol de avocado
+# Elementos adicionales del árbol de avocado
 a green avocado tree leaf, leaf
 a brown avocado tree branch, branch
 a small yellowish avocado tree flower, flower
