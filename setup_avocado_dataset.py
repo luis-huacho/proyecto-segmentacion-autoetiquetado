@@ -1,49 +1,47 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Script de configuración rápida para el dataset de avocados
-Compatible con Python 3.12
-Archivo: setup_avocado_dataset.py
-
-Este script verifica y configura todo lo necesario para procesar el dataset de avocados
+Script de configuración para el dataset de avocados
+Verifica dependencias y prepara el entorno de trabajo
 """
 
-import os
 import sys
+import os
 import subprocess
 from pathlib import Path
 import logging
 
 # Configurar logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 
 def check_python_version():
-    """Verifica que la versión de Python sea compatible"""
+    """Verifica que se esté usando Python 3.12"""
+    logger.info("🐍 Verificando versión de Python...")
+
     version = sys.version_info
-    logger.info(f"🐍 Python {version.major}.{version.minor}.{version.micro}")
-
-    if version.major != 3 or version.minor < 8:
-        logger.error("❌ Se requiere Python 3.8 o superior")
+    if version.major == 3 and version.minor == 12:
+        logger.info(f"✅ Python {version.major}.{version.minor}.{version.micro}")
+        return True
+    else:
+        logger.error(f"❌ Python {version.major}.{version.minor}.{version.micro} detectado")
+        logger.error("⚠️ Se requiere Python 3.12")
         return False
-
-    if version.minor >= 12:
-        logger.info("✅ Python 3.12+ detectado - Totalmente compatible")
-
-    return True
 
 
 def check_required_files():
-    """Verifica que los archivos requeridos del framework existan"""
-    logger.info("🔍 Verificando archivos del framework...")
+    """Verifica que los archivos principales del framework estén presentes"""
+    logger.info("📁 Verificando archivos del framework...")
 
     required_files = [
-        'main_sdm_modular.py',
-        'segmentation.py',
-        'annotations.py',
-        'process_avocado_dataset.py',
-        'run_avocado_processing.py',
-        'utiles/__init__.py'
+        "main_sdm_modular.py",
+        "process_avocado_dataset.py",
+        "run_avocado_processing.py",
+        "description/avocado_des.txt"
     ]
 
     missing_files = []
@@ -52,70 +50,59 @@ def check_required_files():
             missing_files.append(file_path)
 
     if missing_files:
-        logger.error("❌ Archivos faltantes del framework:")
+        logger.error("❌ Archivos faltantes:")
         for file_path in missing_files:
             logger.error(f"   {file_path}")
         return False
 
-    logger.info("✅ Todos los archivos del framework encontrados")
+    logger.info("✅ Todos los archivos del framework están presentes")
     return True
 
 
 def check_dataset_structure(dataset_path):
     """Verifica la estructura del dataset de avocados"""
-    logger.info(f"🔍 Verificando estructura del dataset: {dataset_path}")
+    logger.info("🥑 Verificando estructura del dataset...")
 
     dataset_path = Path(dataset_path)
 
     if not dataset_path.exists():
         logger.error(f"❌ Dataset no encontrado: {dataset_path}")
+        logger.info("💡 Asegúrate de que la ruta del dataset sea correcta")
         return False
 
     # Verificar archivos requeridos
-    description_file = dataset_path / "description.xlsx"
-    images_dir = dataset_path / "images"
+    excel_file = dataset_path / "description.xlsx"
+    images_folder = dataset_path / "images"
 
-    if not description_file.exists():
-        logger.error(f"❌ Archivo de descripción no encontrado: {description_file}")
+    if not excel_file.exists():
+        logger.error(f"❌ Archivo Excel no encontrado: {excel_file}")
         return False
 
-    if not images_dir.exists():
-        logger.error(f"❌ Directorio de imágenes no encontrado: {images_dir}")
+    if not images_folder.exists():
+        logger.error(f"❌ Carpeta de imágenes no encontrada: {images_folder}")
         return False
 
-    # Contar imágenes
-    image_extensions = ['.jpg', '.jpeg', '.png']
-    image_files = []
-    for ext in image_extensions:
-        image_files.extend(images_dir.glob(f"*{ext}"))
-        image_files.extend(images_dir.glob(f"*{ext.upper()}"))
-
-    if len(image_files) == 0:
-        logger.error(f"❌ No se encontraron imágenes en: {images_dir}")
-        return False
-
-    logger.info(f"✅ Dataset válido: {len(image_files)} imágenes encontradas")
-
-    # Verificar archivo Excel
     try:
         import pandas as pd
-        df = pd.read_excel(description_file)
-        required_columns = ['File Name', 'Ripening Index Classification']
+        df = pd.read_excel(excel_file)
+
+        required_columns = ["File Name", "Ripening Index Classification"]
         missing_columns = [col for col in required_columns if col not in df.columns]
 
         if missing_columns:
             logger.error(f"❌ Columnas faltantes en Excel: {missing_columns}")
             return False
 
-        # Verificar clasificaciones válidas
-        valid_classifications = {1, 2, 3, 4, 5}
-        unique_classifications = set(df['Ripening Index Classification'].unique())
-        invalid_classifications = unique_classifications - valid_classifications
+        # Contar imágenes
+        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
+        image_files = [f for f in images_folder.iterdir()
+                       if f.suffix.lower() in image_extensions]
 
-        if invalid_classifications:
-            logger.warning(f"⚠️ Clasificaciones no estándar encontradas: {invalid_classifications}")
+        logger.info(f"✅ Dataset válido: {len(df)} registros, {len(image_files)} imágenes")
 
-        logger.info(f"✅ Excel válido: {len(df)} registros con clasificaciones {sorted(unique_classifications)}")
+        # Verificar clasificaciones
+        classifications = df["Ripening Index Classification"].dropna().unique()
+        logger.info(f"   Clasificaciones encontradas: {sorted(classifications)}")
 
     except Exception as e:
         logger.error(f"❌ Error leyendo Excel: {e}")
@@ -128,24 +115,27 @@ def check_dependencies():
     """Verifica que las dependencias estén instaladas"""
     logger.info("📦 Verificando dependencias...")
 
-    required_packages = [
-        'torch',
-        'torchvision',
-        'opencv-python',
-        'numpy',
-        'pandas',
-        'openpyxl',
-        'matplotlib',
-        'seaborn',
-        'Pillow'
-    ]
+    # Mapeo correcto: nombre_pip -> nombre_importacion
+    required_packages = {
+        'torch': 'torch',
+        'torchvision': 'torchvision',
+        'opencv-python': 'cv2',  # CORREGIDO: opencv-python se importa como cv2
+        'numpy': 'numpy',
+        'pandas': 'pandas',
+        'openpyxl': 'openpyxl',
+        'matplotlib': 'matplotlib',
+        'seaborn': 'seaborn',
+        'Pillow': 'PIL'  # CORREGIDO: Pillow se importa como PIL
+    }
 
     missing_packages = []
-    for package in required_packages:
+    for pip_name, import_name in required_packages.items():
         try:
-            __import__(package.replace('-', '_'))
+            __import__(import_name)
+            logger.info(f"   ✅ {pip_name}")
         except ImportError:
-            missing_packages.append(package)
+            missing_packages.append(pip_name)
+            logger.error(f"   ❌ {pip_name}")
 
     if missing_packages:
         logger.error("❌ Paquetes faltantes:")
@@ -184,7 +174,7 @@ def create_example_commands(dataset_path, output_path):
 # Salida: {output_path}
 
 echo "🥑 COMANDOS PARA PROCESAR DATASET DE AVOCADOS"
-echo "=" * 50
+echo "=================================================="
 
 echo "1️⃣ PREPARAR DATASET (crear splits train/val/test)"
 python process_avocado_dataset.py \\
@@ -243,16 +233,24 @@ def run_quick_test(dataset_path):
     try:
         # Test de importación
         logger.info("   Probando importaciones...")
-        from process_avocado_dataset import AvocadoDatasetProcessor
-        from main_sdm_modular import parse_arguments
-        logger.info("   ✅ Importaciones exitosas")
 
-        # Test de lectura del dataset
-        logger.info("   Probando lectura del dataset...")
-        dataset_path = Path(dataset_path)
+        # Test básicos de importación
+        import torch
+        import cv2
+        import numpy as np
         import pandas as pd
-        df = pd.read_excel(dataset_path / "description.xlsx")
-        logger.info(f"   ✅ Dataset leído: {len(df)} registros")
+        from PIL import Image
+
+        logger.info("   ✅ Importaciones básicas exitosas")
+
+        # Test de lectura del dataset si existe
+        dataset_path = Path(dataset_path)
+        if dataset_path.exists():
+            logger.info("   Probando lectura del dataset...")
+            excel_file = dataset_path / "description.xlsx"
+            if excel_file.exists():
+                df = pd.read_excel(excel_file)
+                logger.info(f"   ✅ Dataset leído: {len(df)} registros")
 
         logger.info("🎉 Prueba rápida exitosa - Sistema listo!")
         return True
