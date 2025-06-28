@@ -1,26 +1,21 @@
-#!/usr/bin/env python3
 """
-Módulo de Segmentación usando SAM2
-Compatible con Python 3.12
-Integración con sistema de logging y manejo optimizado de memoria
+Módulo de Segmentación - SDM-D Framework
+Maneja la segmentación de imágenes usando SAM2 y el procesamiento de máscaras.
 """
 
 import os
 import cv2
-import time
 import torch
 import numpy as np
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+import sys
+import time
 
-# Importaciones SAM2
-try:
-    from sam2.build_sam import build_sam2
-    from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
-except ImportError as e:
-    raise ImportError(f"Error importando SAM2: {e}. Verifica la instalación de SAM2.")
+# Importar SAM2
+sys.path.insert(0, os.path.join(os.getcwd(), 'sam2'))
+from sam2.build_sam import build_sam2
+from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
-# Importaciones locales
 from utiles.mask_utils import MaskProcessor
 from utiles.file_utils import FileManager
 from utiles.logging_utils import SDMLogger
@@ -28,168 +23,113 @@ from utiles.logging_utils import SDMLogger
 
 class SAM2Segmentator:
     """
-    Clase para segmentación usando SAM2 con logging y optimizaciones
+    Clase principal para manejar la segmentación con SAM2
     """
 
-    def __init__(self, checkpoint_path: str = "./checkpoints/sam2_hiera_large.pt",
-                 config_name: str = "sam2_hiera_l.yaml",
-                 points_per_side: int = 32,
-                 pred_iou_thresh: float = 0.8,
-                 stability_score_thresh: float = 0.95,
-                 min_mask_region_area: int = 100,
-                 logger: Optional[SDMLogger] = None):
+    def __init__(self, model_cfg="sam2_hiera_l.yaml", checkpoint_path="./checkpoints/sam2_hiera_large.pt",
+                 points_per_side=32, min_mask_region_area=50, logger=None):
         """
         Inicializa el segmentador SAM2
 
         Args:
-            checkpoint_path (str): Ruta al checkpoint de SAM2
-            config_name (str): Nombre del archivo de configuración
-            points_per_side (int): Puntos por lado para la grid
-            pred_iou_thresh (float): Umbral de IoU predicho
-            stability_score_thresh (float): Umbral de score de estabilidad
-            min_mask_region_area (int): Área mínima de región de máscara
-            logger (Optional[SDMLogger]): Logger personalizado
+            model_cfg (str): Archivo de configuración del modelo
+            checkpoint_path (str): Ruta al checkpoint del modelo
+            points_per_side (int): Número de puntos por lado para la grilla
+            min_mask_region_area (int): Área mínima de región para las máscaras
+            logger (SDMLogger): Logger para seguimiento
         """
+        self.model_cfg = model_cfg
         self.checkpoint_path = checkpoint_path
-        self.config_name = config_name
-        self.logger = logger
-
-        # Parámetros de segmentación
         self.points_per_side = points_per_side
-        self.pred_iou_thresh = pred_iou_thresh
-        self.stability_score_thresh = stability_score_thresh
         self.min_mask_region_area = min_mask_region_area
 
-        # Inicializar procesador de máscaras
-        self.mask_processor = MaskProcessor(logger=logger)
+        # Logger
+        self.logger = logger
 
-        # Configurar dispositivo
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Inicializar modelo
+        self._init_model()
 
-        if self.logger:
-            self.logger.main_logger.info(f"🔧 Dispositivo seleccionado: {self.device}")
-            self.logger.main_logger.info(f"🔧 Configuración SAM2: {config_name}")
-        else:
-            print(f"🔧 Dispositivo seleccionado: {self.device}")
+        # Inicializar procesador de máscaras (sin pasar logger)
+        self.mask_processor = MaskProcessor()
 
-        # Inicializar SAM2
-        self._initialize_sam2()
-
-    def _initialize_sam2(self):
+    def _init_model(self):
         """Inicializa el modelo SAM2"""
         try:
-            if self.logger:
-                self.logger.main_logger.info("🔄 Inicializando SAM2...")
-            else:
-                print("🔄 Inicializando SAM2...")
+            # Configurar GPU si está disponible
+            if torch.cuda.is_available():
+                torch.cuda.set_device(0)
+                device = 'cuda'
 
-            # Verificar checkpoint
-            if not os.path.exists(self.checkpoint_path):
-                error_msg = f"Checkpoint no encontrado: {self.checkpoint_path}"
-                if self.logger:
-                    self.logger.log_error(error_msg, "segmentation")
-                else:
-                    print(f"❌ {error_msg}")
-                raise FileNotFoundError(error_msg)
+                # Optimizaciones para GPU moderna
+                torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
+                if torch.cuda.get_device_properties(0).major >= 8:
+                    torch.backends.cuda.matmul.allow_tf32 = True
+                    torch.backends.cudnn.allow_tf32 = True
+            else:
+                device = 'cpu'
 
             # Construir modelo SAM2
-            self.sam2_model = build_sam2(
-                config_file=self.config_name,
-                ckpt_path=self.checkpoint_path,
-                device=self.device
+            self.sam2 = build_sam2(
+                self.model_cfg,
+                self.checkpoint_path,
+                device=device,
+                apply_postprocessing=False
             )
 
-            # Crear generador automático de máscaras
+            # Crear generador de máscaras automático
             self.mask_generator = SAM2AutomaticMaskGenerator(
-                model=self.sam2_model,
+                self.sam2,
                 points_per_side=self.points_per_side,
-                pred_iou_thresh=self.pred_iou_thresh,
-                stability_score_thresh=self.stability_score_thresh,
-                min_mask_region_area=self.min_mask_region_area,
+                pred_iou_thresh=0.7,
+                stability_score_thresh=0.92,
                 crop_n_layers=1,
                 crop_n_points_downscale_factor=2,
+                min_mask_region_area=self.min_mask_region_area
             )
 
             if self.logger:
-                self.logger.main_logger.info("✅ SAM2 inicializado correctamente")
-                self.logger.main_logger.info(f"📊 Parámetros: points_per_side={self.points_per_side}, "
-                                             f"iou_thresh={self.pred_iou_thresh}, "
-                                             f"stability_thresh={self.stability_score_thresh}")
+                self.logger.main_logger.info(f"✅ Modelo SAM2 inicializado en {device}")
             else:
-                print("✅ SAM2 inicializado correctamente")
+                print(f"✅ Modelo SAM2 inicializado en {device}")
 
         except Exception as e:
-            error_msg = f"Error inicializando SAM2: {e}"
+            error_msg = f"Error inicializando modelo SAM2: {e}"
             if self.logger:
                 self.logger.log_error(error_msg, "segmentation")
             else:
                 print(f"❌ {error_msg}")
             raise
 
-    def segment_image(self, image_path: str) -> List[Dict[str, Any]]:
+    def segment_image(self, image_path):
         """
         Segmenta una imagen individual
 
         Args:
-            image_path (str): Ruta a la imagen
+            image_path (str): Ruta de la imagen
 
         Returns:
-            List[Dict]: Lista de máscaras con metadatos
+            list: Lista de máscaras con metadatos
         """
         try:
-            start_time = time.time()
-
             # Cargar imagen
-            if not os.path.exists(image_path):
-                error_msg = f"Imagen no encontrada: {image_path}"
-                if self.logger:
-                    self.logger.log_error(error_msg, "segmentation")
-                else:
-                    print(f"❌ {error_msg}")
-                return []
-
             image = cv2.imread(image_path)
-            if image is None:
-                error_msg = f"No se pudo cargar la imagen: {image_path}"
-                if self.logger:
-                    self.logger.log_error(error_msg, "segmentation")
-                else:
-                    print(f"❌ {error_msg}")
-                return []
-
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-            if self.logger:
-                self.logger.main_logger.debug(f"🖼️ Procesando imagen: {os.path.basename(image_path)} "
-                                              f"({image_rgb.shape[1]}x{image_rgb.shape[0]})")
 
             # Generar máscaras
             masks = self.mask_generator.generate(image_rgb)
 
-            processing_time = time.time() - start_time
-
             if self.logger:
-                self.logger.log_processing_time(
-                    "segmentation",
-                    processing_time,
-                    metadata={
-                        "image_path": image_path,
-                        "image_size": f"{image_rgb.shape[1]}x{image_rgb.shape[0]}",
-                        "masks_generated": len(masks)
-                    }
-                )
-                self.logger.main_logger.debug(f"✅ Generadas {len(masks)} máscaras en {processing_time:.2f}s")
+                self.logger.main_logger.info(f"🎭 Generadas {len(masks)} máscaras para {Path(image_path).name}")
             else:
-                print(f"✅ Generadas {len(masks)} máscaras en {processing_time:.2f}s")
+                print(f"🎭 Generadas {len(masks)} máscaras para {Path(image_path).name}")
 
             return masks
 
         except Exception as e:
-            processing_time = time.time() - start_time
-            error_msg = f"Error segmentando imagen {image_path}: {e}"
-
+            error_msg = f"Error segmentando {image_path}: {e}"
             if self.logger:
-                self.logger.log_processing_time(
+                self.logger.log_error(
+                    error_msg,
                     "segmentation",
                     processing_time,
                     error=e
@@ -251,57 +191,52 @@ class SAM2Segmentator:
 
                     # Aplicar Mask NMS si está habilitado
                     if enable_mask_nms:
-                        if self.logger:
-                            self.logger.main_logger.debug(f"🔄 Aplicando NMS con umbral {mask_nms_thresh}")
-
                         masks = self.mask_processor.apply_mask_nms(masks, mask_nms_thresh)
 
                         if self.logger:
-                            removed_count = original_mask_count - len(masks)
-                            self.logger.main_logger.debug(f"📊 NMS: {original_mask_count} → {len(masks)} "
-                                                          f"(removidas: {removed_count})")
+                            reduction_pct = ((original_mask_count - len(
+                                masks)) / original_mask_count) * 100 if original_mask_count > 0 else 0
+                            self.logger.seg_logger.info(
+                                f"🎯 NMS aplicado a {image_file}: {original_mask_count} → {len(masks)} máscaras (-{reduction_pct:.1f}%)")
 
-                    # Crear directorios de salida específicos
-                    output_structure = file_manager.get_output_structure_for_dataset()
+                    # Guardar máscaras
+                    mask_output_dir = os.path.join(output_folder, 'mask', subfolder_name, image_name)
+                    os.makedirs(mask_output_dir, exist_ok=True)
 
-                    image_output_dir = os.path.join(
-                        output_structure['masks']['path'],
-                        subfolder_name
-                    )
-                    os.makedirs(image_output_dir, exist_ok=True)
+                    self._save_masks(masks, mask_output_dir)
 
-                    # Guardar máscaras como imágenes PNG
-                    self._save_masks(masks, image_output_dir, image_name)
-
-                    # Guardar visualización si está habilitado
+                    # Guardar visualización con índices
                     if save_annotations:
-                        visualization_dir = os.path.join(
-                            output_structure['visualizations']['path'],
-                            subfolder_name
-                        )
-                        os.makedirs(visualization_dir, exist_ok=True)
+                        visual_output_path = os.path.join(output_folder, 'mask_idx_visual', subfolder_name, image_file)
+                        os.makedirs(os.path.dirname(visual_output_path), exist_ok=True)
+                        self._save_mask_visualization(masks, image_path, visual_output_path)
 
-                        visualization_path = os.path.join(visualization_dir, f"{image_name}_segmentation.png")
-                        self._save_mask_visualization(masks, image_path, visualization_path)
-
-                    # Guardar metadatos JSON si está habilitado
+                    # Guardar metadatos JSON
                     if save_json:
-                        metadata_dir = os.path.join(
-                            output_structure['metadata']['path'],
-                            subfolder_name
-                        )
-                        os.makedirs(metadata_dir, exist_ok=True)
-
-                        metadata_file = os.path.join(metadata_dir, f"{image_name}_metadata.json")
-                        self._save_mask_metadata(masks, metadata_file)
+                        json_output_dir = os.path.join(output_folder, 'json', subfolder_name, image_name)
+                        os.makedirs(json_output_dir, exist_ok=True)
+                        self._save_mask_metadata(masks, json_output_dir)
 
                     processing_time = time.time() - start_time
                     processed_images += 1
 
+                    # Log del procesamiento exitoso
                     if self.logger:
-                        self.logger.main_logger.info(f"✅ {image_file}: {len(masks)} máscaras "
-                                                     f"({processing_time:.2f}s)")
-                        self.logger.update_progress("segmentation", processed_images)
+                        self.logger.log_image_processing(
+                            image_file,
+                            "segmentation",
+                            processing_time,
+                            masks_generated=len(masks)
+                        )
+
+                        # Actualizar métricas de segmentación
+                        self.logger.log_segmentation_metrics(
+                            image_file,
+                            original_mask_count,
+                            len(masks),
+                            enable_mask_nms,
+                            processing_time
+                        )
 
                     # Limpiar memoria
                     del masks
@@ -326,14 +261,14 @@ class SAM2Segmentator:
         else:
             print(f"✅ Segmentación completada: {processed_images}/{total_images} imágenes")
 
-    def _save_masks(self, masks, output_dir, image_name):
+    def _save_masks(self, masks, output_dir):
         """Guarda las máscaras como imágenes PNG"""
         for i, mask in enumerate(masks):
             mask_img = mask['segmentation']
             mask_img = np.stack([mask_img] * 3, axis=-1)  # Convertir a 3 canales
             mask_img = (mask_img * 255).astype(np.uint8)  # Convertir a blanco
 
-            output_path = os.path.join(output_dir, f'{image_name}_mask_{i}.png')
+            output_path = os.path.join(output_dir, f'mask_{i}.png')
             cv2.imwrite(output_path, cv2.cvtColor(mask_img, cv2.COLOR_RGB2BGR))
 
     def _save_mask_visualization(self, masks, image_path, output_path):
@@ -354,64 +289,48 @@ class SAM2Segmentator:
             else:
                 print(f"⚠️ Error guardando visualización: {e}")
 
-    def _save_mask_metadata(self, masks, output_file):
+    def _save_mask_metadata(self, masks, output_dir):
         """Guarda metadatos de máscaras en formato JSON"""
         import json
 
-        metadata_list = []
         for i, mask in enumerate(masks):
             # Extraer metadatos relevantes (sin la máscara binaria)
             metadata = {
-                "mask_id": i,
-                "area": int(mask['area']),
+                "area": mask['area'],
                 "bbox": mask['bbox'],
-                "predicted_iou": float(mask['predicted_iou']),
+                "predicted_iou": mask['predicted_iou'],
                 "point_coords": mask['point_coords'].tolist() if hasattr(mask['point_coords'], 'tolist') else mask[
                     'point_coords'],
-                "stability_score": float(mask['stability_score']),
+                "stability_score": mask['stability_score'],
                 "crop_box": mask['crop_box']
             }
-            metadata_list.append(metadata)
 
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(metadata_list, f, ensure_ascii=False, indent=2)
+            output_path = os.path.join(output_dir, f'mask_{i}.json')
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, ensure_ascii=False, indent=2)
 
 
 def main():
     """Función principal para testing del módulo"""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Módulo de Segmentación SAM2')
-    parser.add_argument('--image_folder', type=str, required=True, help='Carpeta con imágenes')
-    parser.add_argument('--output_folder', type=str, required=True, help='Carpeta de salida')
-    parser.add_argument('--checkpoint', type=str, default='./checkpoints/sam2_hiera_large.pt', help='Checkpoint SAM2')
-    parser.add_argument('--enable_nms', action='store_true', help='Aplicar Mask NMS')
-    parser.add_argument('--nms_thresh', type=float, default=0.9, help='Umbral NMS')
-    parser.add_argument('--save_json', action='store_true', help='Guardar metadatos JSON')
-    parser.add_argument('--verbose', action='store_true', help='Logging detallado')
+    parser = argparse.ArgumentParser(description='Módulo de segmentación SAM2')
+    parser.add_argument('--image_path', type=str, required=True, help='Ruta de la imagen a segmentar')
+    parser.add_argument('--output_folder', type=str, default='./test_output', help='Carpeta de salida')
+    parser.add_argument('--enable_nms', action='store_true', help='Aplicar NMS a las máscaras')
 
     args = parser.parse_args()
 
-    # Configurar logger si está en modo verbose
-    logger = None
-    if args.verbose:
-        logger = SDMLogger(args.output_folder, enable_console=True)
-
     # Crear segmentador
-    segmentator = SAM2Segmentator(checkpoint_path=args.checkpoint, logger=logger)
+    segmentator = SAM2Segmentator()
 
-    # Procesar dataset
-    segmentator.segment_dataset(
-        image_folder=args.image_folder,
-        output_folder=args.output_folder,
-        enable_mask_nms=args.enable_nms,
-        mask_nms_thresh=args.nms_thresh,
-        save_json=args.save_json
-    )
+    # Segmentar imagen
+    masks = segmentator.segment_image(args.image_path)
 
-    # Guardar reporte si hay logger
-    if logger:
-        logger.save_session_report()
+    if args.enable_nms:
+        masks = segmentator.mask_processor.apply_mask_nms(masks)
+
+    print(f"✅ Segmentación completada: {len(masks)} máscaras")
 
 
 if __name__ == "__main__":
