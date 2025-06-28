@@ -214,33 +214,47 @@ def run_segmentation_phase(args):
 
     start_time = time.time()
 
+    # Configurar logger si está habilitado
+    logger = None
+    if hasattr(args, 'verbose') and args.verbose:
+        logger = SDMLogger(args.output_folder, enable_console=True)
+
     # Crear segmentador con configuración específica para avocados
     segmentator = SAM2Segmentator(
         checkpoint_path=args.sam2_checkpoint,
         points_per_side=args.points_per_side,
-        min_mask_region_area=args.min_mask_area
+        min_mask_region_area=args.min_mask_area,
+        logger=logger
     )
 
-    # Configurar NMS si está habilitado
-    if args.enable_nms:
-        segmentator.enable_nms(threshold=args.nms_threshold)
+    # Ejecutar segmentación (NMS se configura directamente aquí)
+    try:
+        segmentator.segment_dataset(
+            image_folder=args.image_folder,
+            output_folder=args.output_folder,
+            enable_mask_nms=args.enable_nms,  # Configurar NMS directamente
+            mask_nms_thresh=args.nms_threshold,  # Usar el umbral de NMS
+            save_annotations=True,
+            save_json=getattr(args, 'save_json', False)
+        )
 
-    # Ejecutar segmentación
-    success = segmentator.segment_dataset(
-        image_folder=args.image_folder,
-        output_folder=args.output_folder,
-        save_json=args.save_json,
-        verbose=args.verbose
-    )
+        segmentation_time = time.time() - start_time
+        print(f"✅ Segmentación completada en {segmentation_time:.2f} segundos")
 
-    if not success:
-        raise RuntimeError("Error durante la segmentación")
+        # Mostrar información adicional para avocados
+        if getattr(args, 'avocado_ripening_dataset', False):
+            print("🥑 Segmentación optimizada para dataset de avocados completada")
+            if args.enable_nms:
+                print(f"🎯 NMS aplicado con umbral: {args.nms_threshold}")
 
-    segmentation_time = time.time() - start_time
-    print(f"✅ Segmentación completada en {segmentation_time:.2f} segundos")
+        return segmentation_time
 
-    return segmentation_time
-
+    except Exception as e:
+        error_msg = f"Error en la fase de segmentación: {e}"
+        if logger:
+            logger.log_error(error_msg, "segmentation")
+        print(f"❌ {error_msg}")
+        raise
 
 def run_annotation_phase(args):
     """Ejecuta la fase de anotación"""
