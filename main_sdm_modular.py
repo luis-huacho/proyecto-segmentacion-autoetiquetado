@@ -451,7 +451,7 @@ def main():
         generate_final_report(args, processing_times)
 
         # Limpiar directorios vacíos
-        file_manager.clean_empty_directories(args.output_folder)
+        file_manager.clean_empty_folders(args.output_folder)
 
         total_time = time.time() - total_start_time
         print(f"\n🎉 ¡Procesamiento completado exitosamente!")
