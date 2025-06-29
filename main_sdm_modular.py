@@ -265,7 +265,7 @@ def run_annotation_phase(args):
 
     # Crear anotador
     annotator = CLIPAnnotator(
-        clip_model=args.clip_model,
+        model_name=args.clip_model,
         pretrained=args.clip_pretrained
     )
 
