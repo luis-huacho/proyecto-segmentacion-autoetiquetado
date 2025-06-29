@@ -4,9 +4,9 @@
 
 # Estados específicos de madurez de avocados (basado en Ripening Index Classification)
 a light green underripe avocado with firm texture, underripe
-a green avocado starting to ripen, breaking stage, breaking
-a dark green ripe avocado in first stage, ready for harvest, ripe_first
-a dark green to black ripe avocado in second stage, optimal harvest, ripe_second
+a green avocado starting to ripen at breaking stage, breaking
+a dark green ripe avocado in first stage ready for harvest, ripe_first
+a dark green to black ripe avocado in second stage at optimal harvest, ripe_second
 a very dark overripe avocado past optimal harvest time, overripe
 
 # Elementos adicionales del árbol de avocado
