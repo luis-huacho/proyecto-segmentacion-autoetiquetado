@@ -232,7 +232,11 @@ class CLIPAnnotator:
             # Determinar carpeta de máscaras
             if mask_folder is None:
                 # Inferir de la estructura del output de segmentación
-                mask_folder = os.path.join(os.path.dirname(output_folder), 'masks')
+                # Primero intentar en la carpeta actual de salida
+                mask_folder = os.path.join(output_folder, 'masks')
+                # Si no existe, intentar en el directorio padre
+                if not os.path.exists(mask_folder):
+                    mask_folder = os.path.join(os.path.dirname(output_folder), 'masks')
 
             if not os.path.exists(mask_folder):
                 error_msg = f"Carpeta de máscaras no encontrada: {mask_folder}"
@@ -274,7 +278,17 @@ class CLIPAnnotator:
                         image_path = os.path.join(subfolder_path, image_file)
 
                         # Determinar directorio de máscaras para esta imagen
-                        mask_dir = os.path.join(mask_folder, subfolder_name, image_name)
+                        # Primero intentar con la estructura train/test/val
+                        mask_dir = None
+                        for split in ['train', 'test', 'val']:
+                            potential_mask_dir = os.path.join(mask_folder, split, subfolder_name, image_name)
+                            if os.path.exists(potential_mask_dir):
+                                mask_dir = potential_mask_dir
+                                break
+                        
+                        # Si no se encuentra con splits, usar estructura original
+                        if mask_dir is None:
+                            mask_dir = os.path.join(mask_folder, subfolder_name, image_name)
 
                         print(f"  🖼️ Anotando: {image_file}")
 
