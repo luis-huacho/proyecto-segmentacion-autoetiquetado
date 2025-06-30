@@ -161,7 +161,13 @@ class CLIPAnnotator:
         try:
             # Aplicar máscara y recortar objeto
             masked_image = self.clip_processor.apply_mask_to_image(image, mask)
-            cropped_object = self.clip_processor.crop_object_from_background(masked_image)
+            crop_result = self.clip_processor.crop_object_from_background(masked_image)
+            
+            # Extraer solo la imagen del resultado de crop_object_from_background
+            if isinstance(crop_result, tuple):
+                cropped_object = crop_result[0]  # Solo tomar la imagen
+            else:
+                cropped_object = crop_result
 
             if cropped_object is None:
                 return "unknown"

@@ -214,11 +214,17 @@ class FileManager:
 
         if isinstance(obj, dict):
             return {k: self._make_serializable(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
+        elif isinstance(obj, (list, tuple)):
             return [self._make_serializable(item) for item in obj]
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
-        elif isinstance(obj, np.generic):
+        elif isinstance(obj, (np.generic, np.integer, np.floating, np.bool_)):
+            return obj.item()
+        elif isinstance(obj, (np.int64, np.int32, np.int16, np.int8)):
+            return int(obj)
+        elif isinstance(obj, (np.float64, np.float32, np.float16)):
+            return float(obj)
+        elif hasattr(obj, 'item'):  # Fallback para otros tipos numpy
             return obj.item()
         else:
             return obj
