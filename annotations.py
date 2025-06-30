@@ -168,6 +168,9 @@ class CLIPAnnotator:
 
             # Preprocesar imagen para CLIP
             preprocessed_image = self.clip_preprocessor(cropped_object)
+            # Si preprocessed_image es una tupla, tomar solo el primer elemento
+            if isinstance(preprocessed_image, tuple):
+                preprocessed_image = preprocessed_image[0]
             image_input = torch.tensor(np.stack([preprocessed_image])).to(self.device)
 
             # Predecir con CLIP
@@ -420,10 +423,10 @@ class CLIPAnnotator:
                 ymin, ymax = coords[0].min(), coords[0].max()
                 xmin, xmax = coords[1].min(), coords[1].max()
 
-                # Crear detección
+                # Crear detección (convertir numpy int64 a int para JSON)
                 detection = {
                     'label': predicted_label,
-                    'class_id': class_id,
+                    'class_id': int(class_id),
                     'xmin': int(xmin), 'ymin': int(ymin),
                     'xmax': int(xmax), 'ymax': int(ymax),
                     'confidence': 1.0  # CLIP no proporciona score de confianza
@@ -443,7 +446,8 @@ class CLIPAnnotator:
                 annotated_masks.append({
                     'mask': mask,
                     'label': predicted_label,
-                    'bbox': (xmin, ymin, xmax, ymax)
+                    'bbox': (xmin, ymin, xmax, ymax),
+                    'segmentation': mask  # Agregar campo requerido para visualización
                 })
 
             return {
