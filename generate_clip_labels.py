@@ -18,8 +18,9 @@ def parse_descriptions(file_path):
         for line in f:
             line = line.strip()
             if line and not line.startswith('#'):
-                parts = line.split(',')
-                if len(parts) >= 2:
+                # Dividir solo en la última coma para separar descripción y etiqueta
+                parts = line.rsplit(',', 1)
+                if len(parts) == 2:
                     descriptions.append(parts[0].strip())
                     labels.append(parts[1].strip())
     return descriptions, labels
