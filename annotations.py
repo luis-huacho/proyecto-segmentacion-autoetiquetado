@@ -177,7 +177,12 @@ class CLIPAnnotator:
             # Si preprocessed_image es una tupla, tomar solo el primer elemento
             if isinstance(preprocessed_image, tuple):
                 preprocessed_image = preprocessed_image[0]
-            image_input = torch.tensor(np.stack([preprocessed_image])).to(self.device)
+            
+            # Crear tensor directamente en el dispositivo correcto
+            if isinstance(preprocessed_image, torch.Tensor):
+                image_input = preprocessed_image.unsqueeze(0).to(self.device)
+            else:
+                image_input = torch.tensor(np.stack([preprocessed_image]), device=self.device)
 
             # Predecir con CLIP
             predicted_label = self.clip_processor.predict_with_clip(

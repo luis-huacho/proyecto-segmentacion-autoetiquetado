@@ -89,6 +89,10 @@ class CLIPProcessor:
         """
         # Tokenizar texto con prefijo "This is"
         text_tokens = tokenizer.tokenize(["This is " + desc for desc in texts])
+        
+        # Mover tokens al dispositivo del modelo
+        device = next(model.parameters()).device
+        text_tokens = text_tokens.to(device)
 
         with torch.no_grad():
             # Obtener características de imagen y texto
