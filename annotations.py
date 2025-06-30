@@ -232,11 +232,16 @@ class CLIPAnnotator:
             # Determinar carpeta de máscaras
             if mask_folder is None:
                 # Inferir de la estructura del output de segmentación
-                # Primero intentar en la carpeta actual de salida
-                mask_folder = os.path.join(output_folder, 'masks')
-                # Si no existe, intentar en el directorio padre
+                # Primero intentar en la carpeta actual de salida (sin 's')
+                mask_folder = os.path.join(output_folder, 'mask')
+                # Si no existe, intentar con 's'
+                if not os.path.exists(mask_folder):
+                    mask_folder = os.path.join(output_folder, 'masks')
+                # Si tampoco existe, intentar en el directorio padre
                 if not os.path.exists(mask_folder):
                     mask_folder = os.path.join(os.path.dirname(output_folder), 'masks')
+                if not os.path.exists(mask_folder):
+                    mask_folder = os.path.join(os.path.dirname(output_folder), 'mask')
 
             if not os.path.exists(mask_folder):
                 error_msg = f"Carpeta de máscaras no encontrada: {mask_folder}"
